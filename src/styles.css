@@ -425,6 +425,13 @@ body.native-fullscreen .phone-frame {
   color: var(--muted);
 }
 
+.now-clock-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
 .body-copy {
   font-size: 14px;
   line-height: 1.45;

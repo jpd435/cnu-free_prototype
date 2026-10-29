@@ -54,9 +54,9 @@ test.describe('CNU Free V2 — Canonical Navigation & Addendum B Acceptance Suit
     await page.setViewportSize({ width: 1280, height: 920 });
     await page.goto('/?dev=1');
 
-    // Set Dev Clock to Tue 09:41 and verify Francis + 4 of your 10 friends on Screen 1, and "10 friends · 4 free now" on Screen 6
+    // Set Dev Clock to Tue 09:41 and verify cnu free? + 4 of your 10 friends on Screen 1, and "10 friends · 4 free now" on Screen 6
     await page.locator('#devClockPresetSelect').selectOption('Tue 09:41');
-    await expect(page.locator('#phoneFrame')).toContainText('Good morning, Francis');
+    await expect(page.locator('#phoneFrame')).toContainText('cnu free?');
     await expect(page.locator('#phoneFrame')).toContainText('4 of your 10 friends');
 
     await page.locator('[data-action="switch-tab"][data-tab="Friends"]').click();

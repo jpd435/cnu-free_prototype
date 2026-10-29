@@ -30,10 +30,9 @@ export function renderNowScreen(state) {
 
   return `
     <div class="screen-scroll" data-screen-id="1">
-      <div class="top-bar" style="padding-bottom:2px;">
+      <div class="top-bar">
         <div>
-          <span class="meta-label" data-bind="now-clock-label">${escapeHtml(`${currentNow.dayLabel} · ${currentNow.formattedTime}`)}</span>
-          <div style="font-size:12px; font-weight:700; color:var(--secondary-text); margin-top:1px;" data-bind="now-greeting">${escapeHtml(`Good morning, ${state.user.firstName}`)}</div>
+          <span class="now-clock-label" data-bind="now-clock-label">${escapeHtml(`${currentNow.dayLabel} · ${currentNow.formattedTime}`)}</span>
         </div>
         <button
           type="button"
