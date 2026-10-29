@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <script>
+    (function () {
+      try {
+        if (
+          window.Capacitor?.isNativePlatform?.() ||
+          (window.innerWidth <= 480 && !window.location.search.includes('dev=1'))
+        ) {
+          document.documentElement.classList.add('native');
+        }
+      } catch (_) {}
+    })();
+  </script>
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="theme-color" content="#EEF1EF" />
+  <title>CNU Free — See Who's Free</title>
+  <link rel="icon" type="image/svg+xml" href="./icon.svg" />
+</head>
+<body>
+  <!-- Floating Developer Switcher Bar (Hidden inside Capacitor or <= 480px unless ?dev=1) -->
+  <header class="dev-toolbar" id="devToolbar" aria-label="Developer screen switcher">
+    <div class="dev-toolbar-inner">
+      <div class="dev-brand">
+        <span class="dev-brand-dot" aria-hidden="true"></span>
+        <span>cnu free · V2 Inspector</span>
+        <span id="devClockReadout" style="font-family:var(--font-sans); font-size:11px; font-weight:700; color:#6CF2A2; background:rgba(108,242,162,0.14); padding:3px 8px; border-radius:999px;">LIVE</span>
+      </div>
+
+      <div class="dev-controls">
+        <label for="screenSelect" style="font-size:11px; color:#B7C6BF; font-weight:700;">Screen:</label>
+        <select id="screenSelect" class="dev-select" aria-label="Select screen"></select>
+
+        <button type="button" class="dev-btn" id="prevScreenBtn" aria-label="Previous screen">← Prev</button>
+        <button type="button" class="dev-btn" id="nextScreenBtn" aria-label="Next screen">Next →</button>
+
+        <!-- (1) Dev Clock: Live | Presets | Speed -->
+        <label for="devClockPresetSelect" style="font-size:11px; color:#B7C6BF; font-weight:700;">Clock:</label>
+        <select id="devClockPresetSelect" class="dev-select" aria-label="Select clock preset">
+          <option value="live">Live (Real Device Time)</option>
+          <option value="Mon 09:30">Preset: Mon 09:30</option>
+          <option value="Tue 09:41">Preset: Tue 09:41</option>
+          <option value="Wed 12:00">Preset: Wed 12:00</option>
+          <option value="Sat 20:30">Preset: Sat 20:30</option>
+          <option value="Sun 10:00">Preset: Sun 10:00</option>
+        </select>
+
+        <select id="devClockSpeedSelect" class="dev-select" aria-label="Select clock speed">
+          <option value="1">Speed: 1×</option>
+          <option value="60">Speed: 60×</option>
+          <option value="600">Speed: 600×</option>
+        </select>
+
+        <!-- (2) Simulate schedule change -->
+        <button type="button" class="dev-btn" id="simulateScheduleChangeBtn" title="Move Gian's Monday Information Management to 14:00-15:30 and notify Inbox">
+          Simulate schedule change
+        </button>
+
+        <!-- (3) Make [friend] private toggle -->
+        <select id="makeFriendPrivateSelect" class="dev-select" aria-label="Toggle friend private status">
+          <option value="">Make [friend] private…</option>
+        </select>
+
+        <!-- (4) Load sample data & Reset to clean -->
+        <button type="button" class="dev-btn" id="loadSampleDataBtn" title="Load demo roster (Francis + 10 friends)">
+          Load sample data
+        </button>
+        <button type="button" class="dev-btn" id="resetCleanBtn" title="Reset to clean state">
+          Reset to clean
+        </button>
+
+        <button type="button" class="dev-btn" id="toggleOcrOutcomeBtn" title="Toggle Force OCR Failure (Screen 4 vs Screen 25)">
+          Force OCR failure: OFF
+        </button>
+
+        <button type="button" class="dev-btn" id="toggleGridBtn">
+          All Screens Grid
+        </button>
+      </div>
+    </div>
+
+    <div class="dev-chip-strip" id="devChipStrip" role="toolbar" aria-label="Quick screen jump buttons"></div>
+  </header>
+
+  <!-- Primary Interactive Mode -->
+  <main class="app-stage" id="interactiveStage">
+    <div class="phone-frame" id="phoneFrame" role="application" aria-label="CNU Free mobile application"></div>
+  </main>
+
+  <!-- Grid Explorer Mode (Desktop / ?dev=1) -->
+  <section class="grid-stage" id="gridStage" aria-label="All screens side-by-side matrix">
+    <div class="grid-container" id="gridContainer"></div>
+  </section>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

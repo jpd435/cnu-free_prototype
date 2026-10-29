@@ -1,0 +1,9 @@
+{
+  "appId": "com.cnufree.app",
+  "appName": "CNU Free",
+  "webDir": "dist",
+  "backgroundColor": "#EEF1EF",
+  "ios": {
+    "contentInset": "never"
+  }
+}
