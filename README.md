@@ -1,6 +1,6 @@
-# CNU Free
+# cnu free
 
-**CNU Free** is a university mobile web application built for university students to see who among their friends is free or busy right now, find overlapping free time, import class timetables, and manage schedule privacy.
+**cnu free** is a university mobile web application built for university students to see who among their friends is free or busy right now, find overlapping free time, import class timetables, and manage schedule privacy.
 
 ---
 
