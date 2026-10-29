@@ -48,7 +48,7 @@ export function renderNowScreen(state) {
       </div>
 
       <div style="padding:0 16px 6px;">
-        <h1 class="display-xl">Who's free</h1>
+        <h1 class="display-xl">cnu free?</h1>
       </div>
 
       <!-- Group Filter Chips (All, Kalbo, Badminton, STEP) -->
