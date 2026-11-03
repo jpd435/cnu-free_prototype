@@ -115,14 +115,14 @@ export function cancelPendingOcr() {
   }
 }
 
-export function scanTimetableImage({ forceFailure = false, delayMs = OCR_SCAN_DELAY_MS, signal = null } = {}) {
+export function scanTimetableImage({ forceFailure = false, delayMs = OCR_SCAN_DELAY_MS, signal = null, image = null } = {}) {
   cancelPendingOcr();
   return new Promise((resolve) => {
     _pendingResolve = resolve;
     if (signal) {
       if (signal.aborted) {
         _pendingResolve = null;
-        resolve({ ok: false, cancelled: true, error: null, drafts: [] });
+        resolve({ ok: false, cancelled: true, error: null, drafts: [], image: null });
         return;
       }
       signal.addEventListener(
@@ -142,14 +142,16 @@ export function scanTimetableImage({ forceFailure = false, delayMs = OCR_SCAN_DE
           ok: false,
           cancelled: false,
           error: 'Could not read timetable photo',
-          drafts: []
+          drafts: [],
+          image
         });
       } else {
         resolve({
           ok: true,
           cancelled: false,
           error: null,
-          drafts: createDefaultOcrDrafts()
+          drafts: createDefaultOcrDrafts(),
+          image
         });
       }
     }, delayMs);

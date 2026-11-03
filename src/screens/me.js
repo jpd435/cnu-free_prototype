@@ -14,7 +14,7 @@
 
 import { ICONS } from '../ui/icons.js';
 import { renderAvatar, escapeHtml } from '../ui/avatar.js';
-import { now, status } from '../time.js';
+import { now, status, getWeekRangeLabel } from '../time.js';
 import { selectFriendsAvailability, selectActiveShareLinks } from '../store.js';
 
 export function renderMeScreen(state) {
@@ -85,7 +85,7 @@ export function renderMeScreen(state) {
               <div class="avatar avatar-sm av-mint" style="color:#073D22;">${ICONS.calendar}</div>
               <div class="row-body">
                 <div class="row-title">My week</div>
-                <div class="row-sub">${classCount} classes · Oct 26 – Nov 1</div>
+                <div class="row-sub">${classCount} classes · ${escapeHtml(getWeekRangeLabel(currentNow))}</div>
               </div>
               <span style="color:#5A6862;">${ICONS.chevronRight}</span>
             </button>

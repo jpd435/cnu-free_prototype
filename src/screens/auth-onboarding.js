@@ -277,7 +277,10 @@ export function renderImportUploadScreen() {
 /**
  * Screen 24: Import — Reading Your Timetable (OCR Loading) (Section 4.9 & 6.2)
  */
-export function renderOcrLoadingScreen() {
+export function renderOcrLoadingScreen(state) {
+  const photo = state?.ui?.importedTimetablePhoto;
+  const targetDesc = photo?.filename ? `"${escapeHtml(photo.filename)}"` : 'your timetable photo';
+
   return `
     <div class="screen-scroll no-nav" data-screen-id="24">
       <div class="top-bar">
@@ -286,7 +289,7 @@ export function renderOcrLoadingScreen() {
 
       <div style="padding:4px 16px 12px;">
         <h1 class="display-xl">Reading your timetable</h1>
-        <p class="body-copy">Finding classes, days, and room numbers from your photo (Mock OCR)…</p>
+        <p class="body-copy">Analyzing ${targetDesc} with the demo schedule parser…</p>
       </div>
 
       <div class="stack-gap">
@@ -364,7 +367,7 @@ export function renderOcrReviewScreen(state) {
 
       <div style="padding:0 16px 8px;">
         <h1 class="display-xl">Review your timetable</h1>
-        <p class="body-copy">We read this from your photo. Tap any class to fix times or rooms before saving.</p>
+        <p class="body-copy">Demo mode: sample classes generated for preview until real OCR is connected. Tap any class to fix times or rooms before saving.</p>
       </div>
 
       <div class="stack-gap">

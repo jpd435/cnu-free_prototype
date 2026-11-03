@@ -159,50 +159,114 @@ export const haptics = {
 };
 
 /* --------------------------------------------------------------------------
+   Cancellation Detector
+   -------------------------------------------------------------------------- */
+export function isUserCancellation(err) {
+  if (!err) return false;
+  if (err.name === 'AbortError') return true;
+  const msg = String(err.message || '').toLowerCase();
+  return msg.includes('cancel') || msg.includes('abort') || msg.includes('dismiss');
+}
+
+/* --------------------------------------------------------------------------
    Clipboard (Section 4.7)
    -------------------------------------------------------------------------- */
 export async function copyToClipboard(text) {
+  const str = String(text ?? '');
   try {
     const plugin = getCapPlugin('Clipboard');
     if (plugin && isNativeApp()) {
-      await plugin.write({ string: text });
+      await plugin.write({ string: str });
       return true;
     }
   } catch (_e) {}
   try {
-    if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
-      await navigator.clipboard.writeText(text);
+    if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      await navigator.clipboard.writeText(str);
       return true;
     }
   } catch (_e) {}
-  return true;
+  try {
+    if (typeof document !== 'undefined' && typeof document.execCommand === 'function') {
+      const textarea = document.createElement('textarea');
+      textarea.value = str;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.left = '-9999px';
+      textarea.style.top = '-9999px';
+      document.body.appendChild(textarea);
+      textarea.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(textarea);
+      if (ok) return true;
+    }
+  } catch (_e) {}
+  return false;
 }
 
 /* --------------------------------------------------------------------------
    Native Share (Section 5)
    -------------------------------------------------------------------------- */
-export async function shareInviteLink({ title = 'CNU Free', text = 'See when I am free on CNU Free', url = 'https://cnufree.com/invite/francis' } = {}) {
-  try {
-    const plugin = getCapPlugin('Share');
-    if (plugin && isNativeApp()) {
+export async function shareInviteLink({
+  title = 'CNU Free',
+  text = 'See when I am free on CNU Free',
+  url = 'https://cnufree.com/invite/francis'
+} = {}) {
+  const plugin = getCapPlugin('Share');
+  if (plugin && isNativeApp()) {
+    try {
       await plugin.share({ title, text, url, dialogTitle: 'Share your invite link' });
-      return { shared: true, method: 'native' };
+      return { ok: true, shared: true, method: 'native' };
+    } catch (err) {
+      if (isUserCancellation(err)) {
+        return { ok: false, shared: false, cancelled: true };
+      }
     }
-  } catch (_e) {}
-  try {
-    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+  }
+
+  if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+    try {
       await navigator.share({ title, text, url });
-      return { shared: true, method: 'webshare' };
+      return { ok: true, shared: true, method: 'webshare' };
+    } catch (err) {
+      if (isUserCancellation(err)) {
+        return { ok: false, shared: false, cancelled: true };
+      }
     }
-  } catch (_e) {}
-  await copyToClipboard(url);
-  return { shared: true, method: 'clipboard', url };
+  }
+
+  const copied = await copyToClipboard(url);
+  if (copied) {
+    return { ok: true, shared: true, method: 'clipboard', url };
+  }
+  return { ok: false, shared: false, cancelled: false, error: 'Clipboard copy failed' };
 }
 
 /* --------------------------------------------------------------------------
    Camera / Photo Library (Section 5: Camera plugin with file input fallback)
    -------------------------------------------------------------------------- */
-export async function pickTimetablePhoto(source = 'PROMPT') {
+export async function pickTimetablePhoto(source = 'PROMPT', options = {}) {
+  // Support explicit test options or simulated file
+  if (options?.testFile) {
+    const file = options.testFile;
+    let objectUrl = '';
+    try {
+      if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
+        objectUrl = URL.createObjectURL(file);
+      }
+    } catch (_e) {
+      objectUrl = `blob://mock-${file.name || 'timetable.png'}`;
+    }
+    return {
+      ok: true,
+      cancelled: false,
+      file,
+      filename: file.name || 'timetable.png',
+      uri: objectUrl || `file://${file.name || 'timetable.png'}`,
+      objectUrl
+    };
+  }
+
   try {
     const camera = getCapPlugin('Camera');
     if (camera && isNativeApp()) {
@@ -212,15 +276,88 @@ export async function pickTimetablePhoto(source = 'PROMPT') {
         resultType: 'uri',
         source: source === 'CAMERA' ? 'CAMERA' : source === 'PHOTOS' ? 'PHOTOS' : 'PROMPT'
       });
-      return { ok: true, uri: photo?.webPath || 'native://timetable.jpg' };
+      return {
+        ok: true,
+        cancelled: false,
+        uri: photo?.webPath || 'native://timetable.jpg',
+        filename: 'timetable.jpg',
+        file: null,
+        objectUrl: null
+      };
     }
   } catch (err) {
-    if (err && String(err.message || '').toLowerCase().includes('cancel')) {
+    if (isUserCancellation(err)) {
       return { ok: false, cancelled: true };
     }
   }
-  // Browser / Test environment fallback returns ready signal immediately or via hidden file input
-  return { ok: true, uri: 'mock://timetable-upload.png' };
+
+  // Browser file picker fallback
+  if (typeof document !== 'undefined') {
+    return new Promise((resolve) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.style.display = 'none';
+      document.body.appendChild(input);
+
+      let resolved = false;
+      const cleanup = () => {
+        if (input.parentNode) {
+          input.parentNode.removeChild(input);
+        }
+        if (typeof window !== 'undefined') {
+          window.removeEventListener('focus', onFocusCheck);
+        }
+      };
+
+      const finish = (result) => {
+        if (resolved) return;
+        resolved = true;
+        cleanup();
+        resolve(result);
+      };
+
+      input.addEventListener('change', () => {
+        const file = input.files && input.files[0];
+        if (!file) {
+          finish({ ok: false, cancelled: true });
+          return;
+        }
+        const objectUrl =
+          typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function'
+            ? URL.createObjectURL(file)
+            : '';
+        finish({
+          ok: true,
+          cancelled: false,
+          file,
+          filename: file.name,
+          uri: objectUrl || `file://${file.name}`,
+          objectUrl
+        });
+      });
+
+      input.addEventListener('cancel', () => {
+        finish({ ok: false, cancelled: true });
+      });
+
+      const onFocusCheck = () => {
+        setTimeout(() => {
+          if (!resolved && (!input.files || input.files.length === 0)) {
+            finish({ ok: false, cancelled: true });
+          }
+        }, 500);
+      };
+
+      if (typeof window !== 'undefined') {
+        window.addEventListener('focus', onFocusCheck, { once: true });
+      }
+
+      input.click();
+    });
+  }
+
+  return { ok: false, cancelled: true };
 }
 
 /* --------------------------------------------------------------------------

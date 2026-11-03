@@ -32,14 +32,102 @@ export const WEEKDAY_FULL = [
 export const WEEKDAY_LETTER = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
 export const DEMO_WEEK_DATES = [
-  { dayIndex: 0, short: 'Mon', letter: 'M', num: 26, label: 'Mon, Oct 26', dotUpper: 'MON · OCT 26' },
-  { dayIndex: 1, short: 'Tue', letter: 'T', num: 27, label: 'Tue, Oct 27', dotUpper: 'TUE · OCT 27' },
-  { dayIndex: 2, short: 'Wed', letter: 'W', num: 28, label: 'Wed, Oct 28', dotUpper: 'WED · OCT 28' },
-  { dayIndex: 3, short: 'Thu', letter: 'T', num: 29, label: 'Thu, Oct 29', dotUpper: 'THU · OCT 29' },
-  { dayIndex: 4, short: 'Fri', letter: 'F', num: 30, label: 'Fri, Oct 30', dotUpper: 'FRI · OCT 30' },
-  { dayIndex: 5, short: 'Sat', letter: 'S', num: 31, label: 'Sat, Oct 31', dotUpper: 'SAT · OCT 31' },
-  { dayIndex: 6, short: 'Sun', letter: 'S', num: 1, label: 'Sun, Nov 1', dotUpper: 'SUN · NOV 1' }
+  { dayIndex: 0, short: 'Mon', letter: 'M', num: 26, label: 'Mon, Oct 26', dotUpper: 'MON · OCT 26', month: 'Oct' },
+  { dayIndex: 1, short: 'Tue', letter: 'T', num: 27, label: 'Tue, Oct 27', dotUpper: 'TUE · OCT 27', month: 'Oct' },
+  { dayIndex: 2, short: 'Wed', letter: 'W', num: 28, label: 'Wed, Oct 28', dotUpper: 'WED · OCT 28', month: 'Oct' },
+  { dayIndex: 3, short: 'Thu', letter: 'T', num: 29, label: 'Thu, Oct 29', dotUpper: 'THU · OCT 29', month: 'Oct' },
+  { dayIndex: 4, short: 'Fri', letter: 'F', num: 30, label: 'Fri, Oct 30', dotUpper: 'FRI · OCT 30', month: 'Oct' },
+  { dayIndex: 5, short: 'Sat', letter: 'S', num: 31, label: 'Sat, Oct 31', dotUpper: 'SAT · OCT 31', month: 'Oct' },
+  { dayIndex: 6, short: 'Sun', letter: 'S', num: 1, label: 'Sun, Nov 1', dotUpper: 'SUN · NOV 1', month: 'Nov' }
 ];
+
+const MONTH_NAMES_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/**
+ * Computes the 7-day Monday..Sunday dates for the week currently shown.
+ * Synchronized with the app's Asia/Manila (UTC+8) timezone and chosen week start (Monday).
+ */
+export function getWeekDates(currentNow = now()) {
+  const epoch =
+    typeof currentNow?.epochMs === 'number'
+      ? currentNow.epochMs
+      : typeof currentNow?.timestamp === 'number'
+      ? currentNow.timestamp
+      : Date.now();
+
+  // Asia/Manila is UTC+8
+  const manilaDate = new Date(epoch + 8 * 3600 * 1000);
+  const manilaDayOfWeek = (manilaDate.getUTCDay() + 6) % 7; // Mon=0..Sun=6
+  const mondayUtc = new Date(
+    Date.UTC(manilaDate.getUTCFullYear(), manilaDate.getUTCMonth(), manilaDate.getUTCDate() - manilaDayOfWeek)
+  );
+
+  const dates = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(Date.UTC(mondayUtc.getUTCFullYear(), mondayUtc.getUTCMonth(), mondayUtc.getUTCDate() + i));
+    const m = MONTH_NAMES_SHORT[d.getUTCMonth()];
+    const num = d.getUTCDate();
+    const short = WEEKDAY_SHORT[i];
+    const letter = WEEKDAY_LETTER[i];
+    dates.push({
+      dayIndex: i,
+      short,
+      letter,
+      num,
+      month: m,
+      year: d.getUTCFullYear(),
+      label: `${short}, ${m} ${num}`,
+      dotUpper: `${short.toUpperCase()} · ${m.toUpperCase()} ${num}`
+    });
+  }
+  return dates;
+}
+
+/**
+ * Returns the formatted week range label (e.g. "Oct 26 – Nov 1" or "Nov 2 – 8").
+ */
+export function getWeekRangeLabel(currentNow = now(), { uppercase = false } = {}) {
+  const dates = getWeekDates(currentNow);
+  const start = dates[0];
+  const end = dates[6];
+  let label;
+  if (start.month === end.month) {
+    label = `${start.month} ${start.num} – ${end.num}`;
+  } else {
+    label = `${start.month} ${start.num} – ${end.month} ${end.num}`;
+  }
+  return uppercase ? label.toUpperCase() : label;
+}
+
+/**
+ * Converts a tap vertical offset within a 7:00 AM – 9:00 PM (14h) column into
+ * a valid start/end slot strictly clamped within [DAY_WINDOW_START, DAY_WINDOW_END].
+ */
+export function getTimeSlotFromTap(clickY, colHeight, {
+  canvasStart = DAY_WINDOW_START,
+  canvasEnd = DAY_WINDOW_END,
+  totalHours = 14,
+  defaultDuration = 60
+} = {}) {
+  if (typeof colHeight !== 'number' || colHeight <= 0) {
+    return {
+      start: 9 * 60,
+      end: 10 * 60
+    };
+  }
+
+  const fraction = Math.max(0, Math.min(0.9999, (clickY || 0) / colHeight));
+  const hourIndex = Math.min(totalHours - 1, Math.max(0, Math.floor(fraction * totalHours)));
+  const tappedHour = 7 + hourIndex; // 7 AM to 8 PM start
+  let start = tappedHour * 60;
+  let end = start + defaultDuration;
+
+  // Clamp strictly within [canvasStart, canvasEnd]
+  start = Math.max(canvasStart, Math.min(canvasEnd - 30, start));
+  end = Math.max(start + 30, Math.min(canvasEnd, end));
+
+  return { start, end };
+}
 
 export function now() {
   return getClockNow();

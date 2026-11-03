@@ -11,6 +11,7 @@ import {
   now,
   status,
   DEMO_WEEK_DATES,
+  getWeekDates,
   DAY_WINDOW_START,
   DAY_WINDOW_END,
   getEntriesForDay,
@@ -28,11 +29,12 @@ export function renderFriendScheduleScreen(state, modeOverride = null) {
   if (!friend) return '';
 
   const currentNow = now();
+  const weekDates = getWeekDates(currentNow);
   const dayIndex =
     typeof state.ui.friendScheduleDayIndex === 'number'
       ? state.ui.friendScheduleDayIndex
       : currentNow.dayIndex;
-  const dayMeta = DEMO_WEEK_DATES[dayIndex] || DEMO_WEEK_DATES[1];
+  const dayMeta = weekDates[dayIndex] || weekDates[1];
   const friendSt = status(friend, currentNow, state.user.id, state.groups);
   const isPrivate = friendSt.state === 'private';
 
@@ -133,15 +135,15 @@ export function renderFriendScheduleScreen(state, modeOverride = null) {
               </div>
             `
             : mode === 'day'
-            ? renderFriendDayBody(friend, dayIndex, dayMeta, currentNow)
-            : renderFriendWeekBody(friend, state.user, sharedOverlap, currentNow)
+            ? renderFriendDayBody(friend, dayIndex, dayMeta, currentNow, weekDates)
+            : renderFriendWeekBody(friend, state.user, sharedOverlap, currentNow, weekDates)
         }
       </div>
     </div>
   `;
 }
 
-function renderFriendDayBody(friend, dayIndex, dayMeta, currentNow) {
+function renderFriendDayBody(friend, dayIndex, dayMeta, currentNow, weekDates = getWeekDates(currentNow)) {
   const canvasStart = DAY_WINDOW_START; // 7:00 AM (420)
   const canvasSpan = DAY_WINDOW_END - DAY_WINDOW_START; // 840 mins (14 hrs)
   const entries = getEntriesForDay(friend, dayIndex);
@@ -150,7 +152,7 @@ function renderFriendDayBody(friend, dayIndex, dayMeta, currentNow) {
 
   return `
     <div class="day-strip" style="padding:0 16px;" role="tablist" aria-label="Select day">
-      ${DEMO_WEEK_DATES.map((d) => {
+      ${weekDates.map((d) => {
         const active = d.dayIndex === dayIndex;
         return `
           <button
@@ -245,7 +247,7 @@ function renderFriendDayBody(friend, dayIndex, dayMeta, currentNow) {
   `;
 }
 
-function renderFriendWeekBody(friend, _user, sharedOverlap, currentNow) {
+function renderFriendWeekBody(friend, _user, sharedOverlap, currentNow, weekDates = getWeekDates(currentNow)) {
   const bestShared = sharedOverlap?.bestWindow;
   const canvasStart = DAY_WINDOW_START;
   const canvasSpan = DAY_WINDOW_END - DAY_WINDOW_START;
@@ -254,7 +256,7 @@ function renderFriendWeekBody(friend, _user, sharedOverlap, currentNow) {
     <div class="card card-pad" style="padding:12px;">
       <div class="week-grid-header">
         <div></div>
-        ${DEMO_WEEK_DATES.map(
+        ${weekDates.map(
           (d) => `<div class="${d.dayIndex === currentNow.dayIndex ? 'today' : ''}">${d.letter}<br>${d.num}</div>`
         ).join('')}
       </div>
@@ -263,7 +265,7 @@ function renderFriendWeekBody(friend, _user, sharedOverlap, currentNow) {
           <div class="week-hours">
             <span>7A</span><span>9A</span><span>11A</span><span>1P</span><span>3P</span><span>5P</span><span>7P</span><span>9P</span>
           </div>
-          ${DEMO_WEEK_DATES.map((d) => {
+          ${weekDates.map((d) => {
             const dayEntries = getEntriesForDay(friend, d.dayIndex);
             const dayFree = computeFreeIntervals(friend, d.dayIndex, canvasStart, DAY_WINDOW_END).filter(
               (iv) => iv.end - iv.start >= 90

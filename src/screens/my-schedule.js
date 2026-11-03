@@ -17,6 +17,8 @@ import { escapeHtml } from '../ui/avatar.js';
 import {
   now,
   DEMO_WEEK_DATES,
+  getWeekDates,
+  getWeekRangeLabel,
   DAY_WINDOW_START,
   DAY_WINDOW_END,
   TIMELINE_HOUR_LABELS,
@@ -33,8 +35,10 @@ import { canPopCurrentStack } from '../router.js';
 export function renderMyScheduleScreen(state, modeOverride = null) {
   const mode = modeOverride || state.ui.myScheduleMode || 'week';
   const currentNow = now();
+  const weekDates = getWeekDates(currentNow);
   const dayIndex = typeof state.ui.myScheduleDayIndex === 'number' ? state.ui.myScheduleDayIndex : currentNow.dayIndex;
-  const dayMeta = DEMO_WEEK_DATES[dayIndex] || DEMO_WEEK_DATES[1];
+  const dayMeta = weekDates[dayIndex] || weekDates[1];
+  const weekRangeUpper = getWeekRangeLabel(currentNow, { uppercase: true });
   const showBack = canPopCurrentStack();
 
   return `
@@ -43,7 +47,7 @@ export function renderMyScheduleScreen(state, modeOverride = null) {
         ${
           showBack
             ? `<button type="button" class="back-btn" data-action="nav-back">${ICONS.back} <span>Back</span></button>`
-            : `<span class="meta-label">${mode === 'day' ? `${escapeHtml(dayMeta.dotUpper)} · YOUR SCHEDULE` : 'OCT 26 – NOV 1 · SEM 1'}</span>`
+            : `<span class="meta-label">${mode === 'day' ? `${escapeHtml(dayMeta.dotUpper)} · YOUR SCHEDULE` : `${escapeHtml(weekRangeUpper)} · SEM 1`}</span>`
         }
         <button
           type="button"
@@ -77,15 +81,15 @@ export function renderMyScheduleScreen(state, modeOverride = null) {
       <div class="stack-gap">
         ${
           mode === 'week'
-            ? renderMyWeekBody(state, currentNow)
-            : renderMyDayBody(state, dayIndex, dayMeta, currentNow)
+            ? renderMyWeekBody(state, currentNow, weekDates)
+            : renderMyDayBody(state, dayIndex, dayMeta, currentNow, weekDates)
         }
       </div>
     </div>
   `;
 }
 
-function renderMyWeekBody(state, currentNow) {
+function renderMyWeekBody(state, currentNow, weekDates = getWeekDates(currentNow)) {
   const canvasStart = DAY_WINDOW_START; // 7:00 (420)
   const canvasEnd = DAY_WINDOW_END;     // 21:00 (1260)
   const canvasSpan = canvasEnd - canvasStart; // 840 mins (14h)
@@ -95,7 +99,7 @@ function renderMyWeekBody(state, currentNow) {
     <div class="card card-pad" style="padding:12px;">
       <div class="week-grid-header">
         <div></div>
-        ${DEMO_WEEK_DATES.map(
+        ${weekDates.map(
           (d) => `<div class="${d.dayIndex === currentNow.dayIndex ? 'today' : ''}">${d.letter}<br>${d.num}</div>`
         ).join('')}
       </div>
@@ -104,7 +108,7 @@ function renderMyWeekBody(state, currentNow) {
           <div class="week-hours">
             ${TIMELINE_HOUR_LABELS.map((lbl) => `<span>${lbl}</span>`).join('')}
           </div>
-          ${DEMO_WEEK_DATES.map((d) => {
+          ${weekDates.map((d) => {
             const dayEntries = getEntriesForDay(state.user, d.dayIndex);
             const dayFree = computeFreeIntervals(state.user, d.dayIndex, canvasStart, canvasEnd).filter(
               (iv) => iv.end - iv.start >= 120
@@ -115,7 +119,6 @@ function renderMyWeekBody(state, currentNow) {
                 class="week-day-col ${d.dayIndex === currentNow.dayIndex ? 'today' : ''}"
                 data-action="empty-slot-add-class"
                 data-day-index="${d.dayIndex}"
-                data-start="540"
                 style="cursor:pointer;"
               >
                 ${dayEntries
@@ -159,6 +162,8 @@ function renderMyWeekBody(state, currentNow) {
                         data-action="empty-slot-add-class"
                         data-day-index="${d.dayIndex}"
                         data-start="${f.start}"
+                        data-end="${f.end}"
+                        data-is-free-block="true"
                       >Free</button>
                     `;
                   })
@@ -181,7 +186,7 @@ function renderMyWeekBody(state, currentNow) {
   `;
 }
 
-function renderMyDayBody(state, dayIndex, dayMeta, currentNow) {
+function renderMyDayBody(state, dayIndex, dayMeta, currentNow, weekDates = getWeekDates(currentNow)) {
   const canvasStart = DAY_WINDOW_START; // 7:00
   const canvasEnd = DAY_WINDOW_END;     // 21:00
   const canvasSpan = canvasEnd - canvasStart; // 840 mins
@@ -191,7 +196,7 @@ function renderMyDayBody(state, dayIndex, dayMeta, currentNow) {
 
   return `
     <div class="day-strip" style="padding:0;" role="tablist" aria-label="Select day">
-      ${DEMO_WEEK_DATES.map((d) => {
+      ${weekDates.map((d) => {
         const active = d.dayIndex === dayIndex;
         return `
           <button
@@ -237,6 +242,8 @@ function renderMyDayBody(state, dayIndex, dayMeta, currentNow) {
                     data-action="empty-slot-add-class"
                     data-day-index="${dayIndex}"
                     data-start="${f.start}"
+                    data-end="${f.end}"
+                    data-is-free-block="true"
                   >
                     <span class="tl-title">Free · ${escapeHtml(formatDuration(e - s))}</span>
                     <span class="tl-sub">${escapeHtml(formatRange(s, e))} · Tap to add class</span>

@@ -16,8 +16,14 @@ import {
   formatDurationLong,
   parseScheduleTitle,
   DAY_WINDOW_START,
-  DAY_WINDOW_END
+  DAY_WINDOW_END,
+  getTimeSlotFromTap,
+  getWeekDates,
+  getWeekRangeLabel
 } from '../src/time.js';
+import { copyToClipboard, shareInviteLink, isUserCancellation, pickTimetablePhoto } from '../src/native.js';
+import { selectOverlapViewData } from '../src/store.js';
+import { renderBaseScreenContent } from '../src/screens/index.js';
 import { setClockPreset, setClockCustom } from '../src/clock.js';
 import { canSee } from '../src/privacy.js';
 import { overlap } from '../src/overlap.js';
@@ -301,5 +307,128 @@ describe('CNU Free V2 — Addendum B Real Roster & Live Schedule Engine', () => 
     const taken = validateUsername('gian', 'francis');
     expect(taken.valid).toBe(false);
     expect(taken.suggestion).toBe('gian.cnu');
+  });
+
+  describe('Six Prototype Issue Fixes', () => {
+    it('1. Week schedule: getTimeSlotFromTap converts vertical offset using 7AM-9PM grid and clamps correctly', () => {
+      const colHeight = 640;
+      // Top click (7:00 AM)
+      const topSlot = getTimeSlotFromTap(0, colHeight);
+      expect(topSlot.start).toBe(7 * 60);
+      expect(topSlot.end).toBe(8 * 60);
+
+      // Bottom click (8:00 PM start, 9:00 PM end)
+      const botSlot = getTimeSlotFromTap(colHeight, colHeight);
+      expect(botSlot.start).toBe(20 * 60);
+      expect(botSlot.end).toBe(21 * 60);
+
+      // 9:00 AM slot: 2nd hour from 7:00 AM (fraction ~2/14)
+      const midY = (2.5 / 14) * colHeight;
+      const midSlot = getTimeSlotFromTap(midY, colHeight);
+      expect(midSlot.start).toBe(9 * 60);
+      expect(midSlot.end).toBe(10 * 60);
+
+      // Clamping near extremes and out-of-bounds
+      const negSlot = getTimeSlotFromTap(-50, colHeight);
+      expect(negSlot.start).toBeGreaterThanOrEqual(DAY_WINDOW_START);
+      expect(negSlot.end).toBeLessThanOrEqual(DAY_WINDOW_END);
+
+      const hugeSlot = getTimeSlotFromTap(9999, colHeight);
+      expect(hugeSlot.start).toBeGreaterThanOrEqual(DAY_WINDOW_START);
+      expect(hugeSlot.end).toBeLessThanOrEqual(DAY_WINDOW_END);
+    });
+
+    it('2. Week schedule: getWeekDates & getWeekRangeLabel calculate dates dynamically consistent with Asia/Manila', () => {
+      // Oct 28, 2026 (Wednesday in anchor week)
+      const oct28Epoch = Date.UTC(2026, 9, 28, 4, 0, 0); // 12:00 PM Manila
+      const dates = getWeekDates({ epochMs: oct28Epoch });
+      expect(dates.length).toBe(7);
+      expect(dates[0]).toMatchObject({ dayIndex: 0, short: 'Mon', num: 26, month: 'Oct' });
+      expect(dates[6]).toMatchObject({ dayIndex: 6, short: 'Sun', num: 1, month: 'Nov' });
+
+      const rangeLabel = getWeekRangeLabel({ epochMs: oct28Epoch });
+      expect(rangeLabel).toBe('Oct 26 – Nov 1');
+      const upperRange = getWeekRangeLabel({ epochMs: oct28Epoch }, { uppercase: true });
+      expect(upperRange).toBe('OCT 26 – NOV 1');
+
+      // Nov 11, 2026 (Wednesday in next week -> Mon Nov 9 to Sun Nov 15)
+      const nov11Epoch = Date.UTC(2026, 10, 11, 4, 0, 0);
+      const novDates = getWeekDates({ epochMs: nov11Epoch });
+      expect(novDates[0]).toMatchObject({ dayIndex: 0, short: 'Mon', num: 9, month: 'Nov' });
+      expect(novDates[6]).toMatchObject({ dayIndex: 6, short: 'Sun', num: 15, month: 'Nov' });
+      expect(getWeekRangeLabel({ epochMs: nov11Epoch })).toBe('Nov 9 – 15');
+    });
+
+    it('3. Clipboard: copyToClipboard returns false when clipboard is unavailable', async () => {
+      // In Node test environment without browser clipboard or native plugins, must return false (not true)
+      const res = await copyToClipboard('https://cnufree.com/test');
+      expect(typeof res).toBe('boolean');
+      expect(res).toBe(false);
+    });
+
+    it('4. Sharing: detects cancellation without falling back to clipboard, reports failure accurately', async () => {
+      // Detect user cancellation
+      expect(isUserCancellation({ name: 'AbortError' })).toBe(true);
+      expect(isUserCancellation(new Error('User cancelled the share'))).toBe(true);
+      expect(isUserCancellation(new Error('Share dismissed by user'))).toBe(true);
+      expect(isUserCancellation(new Error('Network connection timed out'))).toBe(false);
+      expect(isUserCancellation(null)).toBe(false);
+
+      // In Node environment without share API and with failed clipboard: returns ok: false, shared: false
+      const shareRes = await shareInviteLink({ url: 'https://cnufree.com/invite/francis' });
+      expect(shareRes.shared).toBe(false);
+      expect(shareRes.cancelled).toBe(false);
+    });
+
+    it('5. Timetable photo import: pickTimetablePhoto returns selected file and handles cancellation', async () => {
+      const mockFile = new Blob(['sample-timetable'], { type: 'image/png' });
+      mockFile.name = 'my_registrar_timetable.png';
+      const picked = await pickTimetablePhoto('PROMPT', { testFile: mockFile });
+      expect(picked.ok).toBe(true);
+      expect(picked.cancelled).toBe(false);
+      expect(picked.filename).toBe('my_registrar_timetable.png');
+      expect(picked.file).toBe(mockFile);
+
+      // In node without document/native app, default call returns cancelled gracefully without throwing
+      const cancelled = await pickTimetablePhoto('PROMPT');
+      expect(cancelled.ok).toBe(false);
+      expect(cancelled.cancelled).toBe(true);
+    });
+
+    it('6. Screen 36: renders privacy from real state without mutating data', () => {
+      const state = repo.getState();
+      // Ensure real state initially has no private participants
+      const overlapBefore = selectOverlapViewData(state);
+      expect(overlapBefore.hasPrivateParticipant).toBe(false);
+
+      const friendsBeforeCount = state.friends.length;
+      const jellahBefore = state.friends.find((f) => f.id === 'jellah');
+      expect(jellahBefore.shareLevelToUser).toBe('full');
+
+      // Render Screen 36 directly without a private participant
+      const html36 = renderBaseScreenContent('36', state);
+      expect(html36).toContain('data-screen-id="36"');
+      expect(html36).toContain('No private participants selected');
+
+      // Verify NO state mutation occurred
+      const stateAfter = repo.getState();
+      expect(stateAfter.friends.length).toBe(friendsBeforeCount);
+      const jellahAfter = stateAfter.friends.find((f) => f.id === 'jellah');
+      expect(jellahAfter.shareLevelToUser).toBe('full');
+      expect(stateAfter.ui.overlapParticipantIds).toEqual(state.ui.overlapParticipantIds);
+
+      // When a friend is made private and selected, Screen 36 renders real overlap with amber banner
+      repo.dispatch('TOGGLE_FRIEND_PRIVATE', { friendId: 'jellah', isPrivate: true });
+      repo.dispatch('SET_OVERLAP_PARTICIPANTS', { participantIds: ['francis', 'gian', 'jellah'] });
+      const stateWithPrivate = repo.getState();
+      const overlapWithPrivate = selectOverlapViewData(stateWithPrivate);
+      expect(overlapWithPrivate.hasPrivateParticipant).toBe(true);
+
+      const html36Private = renderBaseScreenContent('36', stateWithPrivate);
+      expect(html36Private).toContain('data-screen-id="36"');
+      expect(html36Private).toContain('amber-banner');
+      expect(html36Private).toContain('schedule is private');
+      expect(html36Private).toContain('Jellah');
+    });
   });
 });

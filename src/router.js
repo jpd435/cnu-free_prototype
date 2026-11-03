@@ -431,20 +431,9 @@ function applyScreenStateParams(viewId, options = {}) {
         repo.dispatch('SET_OVERLAP_PARTICIPANTS', { participantIds: ['francis', 'gian', 'danica'] });
       }
       break;
-    case '36': {
-      // Overlap with a private friend selected
-      const anyPrivate = state.friends.find(
-        (f) => f.shareLevelToUser === 'private' || f.shareLevelToUser === 'none'
-      );
-      const privId = anyPrivate ? anyPrivate.id : 'jellah';
-      if (!anyPrivate) {
-        repo.dispatch('TOGGLE_FRIEND_PRIVATE', { friendId: privId, isPrivate: true });
-      }
-      if (!state.ui.overlapParticipantIds.includes(privId)) {
-        repo.dispatch('SET_OVERLAP_PARTICIPANTS', { participantIds: ['francis', 'gian', privId] });
-      }
+    case '36':
+      // Real state only: no preview mutation of friend privacy or participant lists
       break;
-    }
     case '3':
       repo.dispatch('SET_UI', {
         friendScheduleMode: 'day',

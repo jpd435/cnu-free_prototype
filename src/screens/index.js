@@ -49,8 +49,9 @@ import {
   renderCancelPendingRequestSheet
 } from '../ui/sheet.js';
 import { renderToastBar, getActiveToast } from '../ui/toast.js';
-import { selectFriendById } from '../store.js';
+import { selectFriendById, selectOverlapViewData } from '../store.js';
 import { normalizeScreenId } from '../router.js';
+import { ICONS } from '../ui/icons.js';
 
 /**
  * Renders the inner content of a screen (without tabbar/toast) for either
@@ -134,23 +135,11 @@ export function renderBaseScreenContent(rawId, state, { isStandalonePreview = fa
     case '35':
       return renderFriendScheduleScreen(state, 'week');
     case '36': {
-      const savedIds = state.ui.overlapParticipantIds || [];
-      const hasPrivate = savedIds.some((pid) => {
-        const f = state.friends.find((fr) => fr.id === pid);
-        return f && (f.shareLevelToUser === 'private' || f.shareLevelToUser === 'none');
-      });
-      if (!hasPrivate) {
-        const cloneFriends = state.friends.map((f) =>
-          f.id === 'jellah' ? { ...f, shareLevelToUser: 'private' } : f
-        );
-        const clone = {
-          ...state,
-          friends: cloneFriends,
-          ui: { ...state.ui, overlapParticipantIds: ['francis', 'gian', 'jellah'] }
-        };
-        return renderOverlapScreen(clone);
+      const overlapData = selectOverlapViewData(state);
+      if (overlapData.hasPrivateParticipant) {
+        return renderOverlapScreen(state);
       }
-      return renderOverlapScreen(state);
+      return renderScreen36EmptyInstructional(state);
     }
     case '37':
       return renderMyScheduleScreen(state, 'day');
@@ -211,6 +200,35 @@ export function renderActiveOverlay(overlay, state) {
     default:
       return '';
   }
+}
+
+function renderScreen36EmptyInstructional(_state) {
+  return `
+    <div class="screen-scroll" data-screen-id="36">
+      <div class="top-bar">
+        <span class="meta-label">COMPARE SCHEDULES · PRIVATE OVERLAP</span>
+      </div>
+      <div style="padding:0 16px 8px;">
+        <h1 class="display-xl">Private friend overlap</h1>
+      </div>
+      <div class="stack-gap" style="margin-top:12px;">
+        <div class="card card-pad" style="text-align:center; padding:32px 20px;">
+          <div class="avatar avatar-lg av-gold" style="margin:0 auto 12px; color:#5C3A00;">${ICONS.lock}</div>
+          <h2 class="row-title" style="font-size:18px; margin-bottom:8px;">No private participants selected</h2>
+          <p class="row-sub" style="margin-bottom:20px; line-height:1.45;">
+            This screen displays when comparing schedules with a friend whose schedule is private. To view the amber notice and access request workflow, select a friend with a private schedule in the Overlap friend picker or set a friend to private via the Dev Toolbar.
+          </p>
+          <button
+            type="button"
+            class="btn-primary"
+            data-action="switch-tab"
+            data-tab="Overlap"
+            style="min-height:44px;"
+          >Go to Overlap view</button>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 /**

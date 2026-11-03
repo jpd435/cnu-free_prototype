@@ -47,6 +47,7 @@ import { runMockOcr, cancelPendingOcr } from './ocr-mock.js';
 import {
   now,
   status,
+  getTimeSlotFromTap,
   DAY_WINDOW_START,
   DAY_WINDOW_END
 } from './time.js';
@@ -637,8 +638,18 @@ function bindAppEvents(phoneFrame) {
           text: `Add me (@${state.user.username}) on CNU Free to compare our schedules!`,
           url: `https://cnufree.com/invite/${state.user.username}`
         });
-        if (res.method === 'clipboard') {
-          showToast('Invite link copied');
+        if (res.cancelled) {
+          // User cancelled or dismissed share dialog; no toast
+          break;
+        }
+        if (res.shared) {
+          if (res.method === 'clipboard') {
+            haptics.success();
+            showToast('Invite link copied');
+          }
+        } else {
+          haptics.warning();
+          showToast('Unable to share link');
         }
         break;
       }
@@ -1000,15 +1011,44 @@ function bindAppEvents(phoneFrame) {
       }
 
       case 'empty-slot-add-class': {
-        const dayIndex = Number(actionEl.getAttribute('data-day-index') || 1);
-        const start = Number(actionEl.getAttribute('data-start') || 540);
+        const dayIndex = Number(actionEl.getAttribute('data-day-index') || 0);
+        let start;
+        let end;
+
+        const isExplicitFree =
+          actionEl.getAttribute('data-is-free-block') === 'true' ||
+          actionEl.classList.contains('free');
+
+        if (isExplicitFree && actionEl.hasAttribute('data-start')) {
+          start = Number(actionEl.getAttribute('data-start'));
+          const explicitEnd = actionEl.getAttribute('data-end')
+            ? Number(actionEl.getAttribute('data-end'))
+            : start + 60;
+          end = Math.min(DAY_WINDOW_END, Math.max(start + 30, explicitEnd));
+        } else {
+          const rect = actionEl.getBoundingClientRect();
+          const clickY = typeof e.clientY === 'number' ? e.clientY - rect.top : 0;
+          const slot = getTimeSlotFromTap(clickY, rect.height, {
+            canvasStart: DAY_WINDOW_START,
+            canvasEnd: DAY_WINDOW_END,
+            totalHours: 14,
+            defaultDuration: 60
+          });
+          start = slot.start;
+          end = slot.end;
+        }
+
+        // Clamp strictly within [DAY_WINDOW_START, DAY_WINDOW_END]
+        start = Math.max(DAY_WINDOW_START, Math.min(DAY_WINDOW_END - 30, start));
+        end = Math.max(start + 30, Math.min(DAY_WINDOW_END, end));
+
         const returnTo = getActiveScreenId() === '37' ? '37' : '8';
         repo.dispatch('OPEN_CLASS_FORM', {
           mode: 'add',
           returnTo,
           dayIndex,
           start,
-          end: start + 60
+          end
         });
         pushScreen('9');
         break;
@@ -1151,9 +1191,14 @@ function bindAppEvents(phoneFrame) {
 
       case 'copy-share-link': {
         const linkId = actionEl.getAttribute('data-link-id') || state.ui.activeShareLinkId || 'francis_8472';
-        await copyToClipboard(`https://cnufree.com/s/${linkId}`);
-        haptics.success();
-        showToast('Link copied');
+        const ok = await copyToClipboard(`https://cnufree.com/s/${linkId}`);
+        if (ok) {
+          haptics.success();
+          showToast('Link copied');
+        } else {
+          haptics.warning();
+          showToast('Failed to copy link');
+        }
         break;
       }
 
@@ -1206,9 +1251,14 @@ function bindAppEvents(phoneFrame) {
       case 'create-share-link': {
         const res = repo.dispatch('CREATE_SHARE_LINK', {});
         if (res.ok && res.url) {
-          await copyToClipboard(res.url);
-          haptics.success();
-          showToast(res.toast || 'Link created & copied');
+          const copied = await copyToClipboard(res.url);
+          if (copied) {
+            haptics.success();
+            showToast(res.toast || 'Share link created & copied');
+          } else {
+            haptics.warning();
+            showToast('Share link created (copy failed)');
+          }
           renderCurrentScreen();
         }
         break;
@@ -1394,8 +1444,8 @@ function bindAppEvents(phoneFrame) {
       case 'pick-timetable-photo': {
         const source = actionEl.getAttribute('data-source') || 'PROMPT';
         const picked = await pickTimetablePhoto(source);
-        if (picked.cancelled) return;
-        startOcrScanFlow();
+        if (!picked || picked.cancelled || !picked.ok) return;
+        startOcrScanFlow(picked);
         break;
       }
 
@@ -1405,16 +1455,19 @@ function bindAppEvents(phoneFrame) {
           _ocrAbortController.abort();
           _ocrAbortController = null;
         }
+        cleanupImportedPhoto();
         popScreen('28');
         break;
       }
 
       case 'retake-timetable-photo': {
+        cleanupImportedPhoto();
         popScreen('28');
         break;
       }
 
       case 'add-classes-manually-from-ocr': {
+        cleanupImportedPhoto();
         repo.dispatch('OPEN_CLASS_FORM', { mode: 'add', returnTo: '8' });
         pushScreen('9');
         break;
@@ -1434,6 +1487,7 @@ function bindAppEvents(phoneFrame) {
       case 'save-ocr-timetable': {
         const res = repo.dispatch('SAVE_OCR_TIMETABLE', {});
         if (res.ok) {
+          cleanupImportedPhoto();
           haptics.success();
           pushScreen('29');
         } else if (res.error) {
@@ -1746,18 +1800,37 @@ function bindAppEvents(phoneFrame) {
   );
 }
 
-async function startOcrScanFlow() {
+function cleanupImportedPhoto() {
+  const state = repo.getState();
+  const photo = state.ui?.importedTimetablePhoto;
+  if (photo?.objectUrl && typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') {
+    try {
+      URL.revokeObjectURL(photo.objectUrl);
+    } catch (_e) {}
+  }
+  if (photo) {
+    repo.dispatch('SET_UI', { importedTimetablePhoto: null });
+  }
+}
+
+async function startOcrScanFlow(pickedPhoto = null) {
   if (_ocrAbortController) {
     _ocrAbortController.abort();
   }
   _ocrAbortController = new AbortController();
+
+  if (pickedPhoto) {
+    repo.dispatch('SET_UI', { importedTimetablePhoto: pickedPhoto });
+  }
+
   pushScreen('24');
 
   const state = repo.getState();
   const res = await runMockOcr({
     forceFailure: Boolean(state.forceOcrFailure),
     delayMs: 2200,
-    signal: _ocrAbortController.signal
+    signal: _ocrAbortController.signal,
+    image: pickedPhoto || state.ui?.importedTimetablePhoto
   });
 
   if (res.cancelled) return;
