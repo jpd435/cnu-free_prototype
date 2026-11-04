@@ -209,8 +209,8 @@ export function validateAuthForm(form = {}, explicitMode = null) {
     errors.username = 'Enter your username or email';
     errors.email = 'Enter your username or email';
   }
-  if (!password || password.length < 6) {
-    errors.password = 'Password must be at least 6 characters';
+  if (!password || password.length < 8) {
+    errors.password = 'Password must be at least 8 characters';
   }
   return {
     valid: Object.keys(errors).length === 0,
@@ -223,8 +223,11 @@ export function validateGroupName(name, existingGroups = [], excludeGroupId = nu
   if (!trimmed) {
     return { valid: false, error: 'Enter a group name', trimmed: '', cleanName: '' };
   }
-  if (trimmed.length > 30) {
-    return { valid: false, error: 'Group name must be 30 characters or fewer', trimmed, cleanName: trimmed };
+  if (trimmed.length < 2) {
+    return { valid: false, error: 'Group name must be at least 2 characters', trimmed, cleanName: trimmed };
+  }
+  if (trimmed.length > 24) {
+    return { valid: false, error: 'Group name must be 24 characters or fewer', trimmed, cleanName: trimmed };
   }
   if (Array.isArray(existingGroups)) {
     const dup = existingGroups.find(
@@ -235,4 +238,80 @@ export function validateGroupName(name, existingGroups = [], excludeGroupId = nu
     }
   }
   return { valid: true, error: null, trimmed, cleanName: trimmed };
+}
+
+/**
+ * Validates proposal creation input parameters (P1 Fix #9).
+ */
+export function validateProposalInput(payload = {}, existingFriendIds = []) {
+  const { windowStart, windowEnd, dayIndex, participantIds } = payload;
+  if (typeof windowStart !== 'number' || typeof windowEnd !== 'number') {
+    return { valid: false, error: 'Start and end time must be numbers' };
+  }
+  if (windowStart < 420 || windowEnd > 1260) {
+    return { valid: false, error: 'Proposed time must be within 7:00 AM – 9:00 PM' };
+  }
+  if (windowEnd - windowStart < 15) {
+    return { valid: false, error: 'Proposed window must be at least 15 minutes' };
+  }
+  if (typeof dayIndex !== 'number' || dayIndex < 0 || dayIndex > 6) {
+    return { valid: false, error: 'Invalid day of the week' };
+  }
+  if (!Array.isArray(participantIds) || participantIds.length === 0) {
+    return { valid: false, error: 'Participant list cannot be empty' };
+  }
+  if (Array.isArray(existingFriendIds) && existingFriendIds.length > 0) {
+    const invalidFriend = participantIds.find(
+      (id) => id !== 'francis' && id !== 'self' && !existingFriendIds.includes(id)
+    );
+    if (invalidFriend) {
+      return { valid: false, error: `Invalid participant ID: "${invalidFriend}"` };
+    }
+  }
+  return { valid: true, error: null };
+}
+
+/**
+ * Validates share link generation configuration (P1 Fix #9).
+ */
+export function validateShareLinkConfig(config = {}) {
+  const validAudiences = ['full', 'free_busy', 'free_only', 'busy_only'];
+  const audience = config.audience || 'free_busy';
+  if (!validAudiences.includes(audience)) {
+    return { valid: false, error: `Invalid audience mode: ${audience}` };
+  }
+  const expiryDays = Number(config.expiryDays);
+  if (!Number.isInteger(expiryDays) || expiryDays < 1 || expiryDays > 30) {
+    return { valid: false, error: 'Expiry must be between 1 and 30 days' };
+  }
+  const start = typeof config.hoursStart === 'number' ? config.hoursStart : 540;
+  const end = typeof config.hoursEnd === 'number' ? config.hoursEnd : 1020;
+  if (start >= end) {
+    return { valid: false, error: 'Share hours start time must be before end time' };
+  }
+  return { valid: true, error: null };
+}
+
+/**
+ * Validates access rule input parameters (P1 Fix #9).
+ */
+export function validateAccessRuleInput(payload = {}, validPersonIds = [], validGroupIds = []) {
+  const { targetType, targetId, level } = payload;
+  const validLevels = ['full', 'free_busy', 'free_only', 'busy_only', 'none'];
+  if (!validLevels.includes(level)) {
+    return { valid: false, error: `Invalid access level: ${level}` };
+  }
+  if (targetType !== 'person' && targetType !== 'group') {
+    return { valid: false, error: 'Target type must be "person" or "group"' };
+  }
+  if (!targetId || typeof targetId !== 'string') {
+    return { valid: false, error: 'Target ID is required' };
+  }
+  if (targetType === 'person' && validPersonIds.length > 0 && !validPersonIds.includes(targetId)) {
+    return { valid: false, error: `Person ID not found: "${targetId}"` };
+  }
+  if (targetType === 'group' && validGroupIds.length > 0 && !validGroupIds.includes(targetId)) {
+    return { valid: false, error: `Group ID not found: "${targetId}"` };
+  }
+  return { valid: true, error: null };
 }

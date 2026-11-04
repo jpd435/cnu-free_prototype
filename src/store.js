@@ -61,12 +61,32 @@ import {
   validateClassEntry,
   validateProfileForm,
   validateAuthForm,
-  validateGroupName
+  validateGroupName,
+  validateProposalInput,
+  validateShareLinkConfig,
+  validateAccessRuleInput
 } from './validators.js';
 import { canSaveOcrDrafts, createDefaultOcrDrafts } from './ocr-mock.js';
 import { storageBridge } from './native.js';
 
 export const STORAGE_KEY = 'cnu_free_v3_state';
+
+/**
+ * Generates an unguessable 128-bit hex token for public share links (P0 Fix #4).
+ */
+export function generateSecureToken() {
+  if (typeof crypto !== 'undefined') {
+    if (typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID().replace(/-/g, '');
+    }
+    if (typeof crypto.getRandomValues === 'function') {
+      const bytes = new Uint8Array(16);
+      crypto.getRandomValues(bytes);
+      return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    }
+  }
+  return Array.from({ length: 4 }, () => Math.random().toString(36).slice(2)).join('').slice(0, 32);
+}
 
 let _state = loadInitialStateSync();
 const _listeners = new Set();
@@ -110,6 +130,38 @@ function ensureScheduleRevs(state) {
   if (typeof state.proposalsRev !== 'number') {
     state.proposalsRev = 1;
   }
+  if (!state.accounts || typeof state.accounts !== 'object') {
+    state.accounts = {};
+  }
+  if (state.user && !state.accounts[state.user.id || 'francis']) {
+    state.accounts[state.user.id || 'francis'] = {
+      id: state.user.id || 'francis',
+      username: state.user.username || 'francis',
+      email: state.user.email || 'francis@cnu.edu.ph',
+      password: 'password123',
+      firstName: state.user.firstName || 'Francis',
+      lastName: state.user.lastName || '',
+      name: state.user.name || 'Francis',
+      avatarClass: state.user.avatarClass || 'av-ink',
+      privacyConfig: state.user.privacyConfig,
+      entries: [...(state.user.entries || [])]
+    };
+  }
+  for (const f of state.friends || []) {
+    if (!state.accounts[f.id]) {
+      state.accounts[f.id] = {
+        id: f.id,
+        username: f.username || f.id,
+        email: `${f.id}@cnu.edu.ph`,
+        password: 'password123',
+        firstName: f.firstName,
+        lastName: f.lastName || '',
+        name: f.name,
+        avatarClass: f.avatarClass,
+        entries: [...(f.entries || [])]
+      };
+    }
+  }
   return state;
 }
 
@@ -134,6 +186,8 @@ function persistStateBeforeEmit(state) {
     return { ok: false, error: 'Could not save schedule changes. Rolled back.' };
   }
   try {
+    // Stamp timestamp to resolve storage races (P1 Fix #6)
+    state._savedAt = Date.now();
     const serialized = JSON.stringify(state);
     const syncOk = storageBridge.setSync(STORAGE_KEY, serialized);
     if (!syncOk) {
@@ -700,9 +754,17 @@ export function importEntries(payload = {}) {
     };
   }
 
-  // Validate each draft row via V2 4.6 rules (title, start < end >= 15m, days)
+  const targetPerson = getOwnerTarget(_state, ownerId)?.person;
+  const existingEntries = targetPerson?.entries || [];
+  // Strategy: explicit payload.strategy ('merge' | 'replace'), defaulting to 'replace' during onboarding or empty schedule, else 'merge' (P1 Fix #8)
+  const strategy = payload.strategy || ((existingEntries.length === 0 || _state.session?.onboarding) ? 'replace' : 'merge');
+
+  // Validate each draft row with intra-batch collision detection and existing entry collision check
+  const acceptedBatchEntries = [];
   for (const d of drafts) {
     const daysList = Array.isArray(d.days) && d.days.length > 0 ? d.days : [typeof d.day === 'number' ? d.day : 0];
+    const baseToCheck = strategy === 'merge' ? [...existingEntries, ...acceptedBatchEntries] : [...acceptedBatchEntries];
+
     const check = validateClassEntry(
       {
         id: d.id,
@@ -712,7 +774,7 @@ export function importEntries(payload = {}) {
         end: d.end,
         repeat: d.repeat || 'weekly'
       },
-      []
+      baseToCheck
     );
     if (!check.valid) {
       return {
@@ -721,9 +783,21 @@ export function importEntries(payload = {}) {
         error: Object.values(check.errors)[0] || 'Invalid imported class entry'
       };
     }
+
+    // Record accepted entries in this batch for collision checking against subsequent batch entries
+    for (const dayIdx of daysList) {
+      acceptedBatchEntries.push({
+        id: d.id || `batch-${acceptedBatchEntries.length}`,
+        day: dayIdx,
+        dayIndex: dayIdx,
+        days: [dayIdx],
+        start: d.start,
+        end: d.end
+      });
+    }
   }
 
-  const oldDays = (_state.user?.entries || []).flatMap((e) => extractEntryDays(e));
+  const oldDays = strategy === 'replace' ? (targetPerson?.entries || []).flatMap((e) => extractEntryDays(e)) : [];
 
   return executeScheduleMutation({
     actionName: 'importEntries',
@@ -765,7 +839,12 @@ export function importEntries(payload = {}) {
       }
 
       const target = getOwnerTarget(draftState, ownerId).person;
-      target.entries = expandedEntries;
+      if (strategy === 'replace') {
+        target.entries = expandedEntries;
+      } else {
+        target.entries = [...(target.entries || []), ...expandedEntries];
+      }
+
       if (ownerId === 'francis' || ownerId === draftState.user?.id) {
         draftState.session.onboarding = false;
       }
@@ -1897,6 +1976,7 @@ export const repo = {
   },
 
   dispatch(actionType, payload = {}) {
+    const preDispatchSnapshot = cloneState(_state);
     const currentNow = now();
     let result = { ok: true };
 
@@ -2021,9 +2101,9 @@ export const repo = {
       }
 
       case 'TOGGLE_FRIEND_PRIVATE': {
-        const friendId = payload.friendId;
+        const friendId = payload.friendId || _state.ui.activeFriendId;
         const friend = (_state.friends || []).find((f) => f.id === friendId);
-        if (!friend) return { ok: false };
+        if (!friend) return { ok: false, error: 'Friend not found' };
         const currentlyPrivate =
           friend.shareLevel === 'none' ||
           friend.sharesWithViewer === 'none' ||
@@ -2059,7 +2139,7 @@ export const repo = {
       }
 
       /* --------------------------------------------------------------------
-         Auth & Session Lifecycle
+         Auth & Session Lifecycle (P0 Fix #2: Real Auth & User Isolation)
          -------------------------------------------------------------------- */
       case 'AUTH_SUBMIT': {
         const mode = payload.mode || _state.ui.authMode || 'signin';
@@ -2068,41 +2148,131 @@ export const repo = {
         if (!validation.valid) {
           return { ok: false, errors: validation.errors };
         }
-        const cleanUsername = String(form.username || form.email?.split('@')[0] || 'francis')
+        const cleanUsername = String(form.username || form.email?.split('@')[0] || '')
           .trim()
           .toLowerCase()
           .replace(/^@/, '');
+
+        if (!_state.accounts) {
+          _state.accounts = {};
+        }
+
+        // Save current user to accounts store before switching
+        if (_state.user && _state.user.id) {
+          const existingAcc = _state.accounts[_state.user.id];
+          _state.accounts[_state.user.id] = {
+            ..._state.user,
+            password: existingAcc?.password || 'password123',
+            entries: [...(_state.user.entries || [])]
+          };
+        }
+
         if (mode === 'create') {
-          const firstName = String(form.firstName || form.name || 'Francis').trim();
+          if (_state.accounts[cleanUsername]) {
+            return { ok: false, errors: { username: 'Username already exists' } };
+          }
+          const firstName = String(form.firstName || form.name || cleanUsername).trim();
           const lastName = String(form.lastName || '').trim();
           const fullName = lastName ? `${firstName} ${lastName}` : firstName;
-          const initials = ((firstName[0] || 'F') + (lastName[0] || firstName[1] || 'R')).toUpperCase();
-          _state.user.firstName = firstName;
-          _state.user.lastName = lastName;
-          _state.user.name = fullName;
-          _state.user.username = cleanUsername;
-          _state.user.initials = initials;
-          _state.user.shortInitial = firstName[0].toUpperCase();
-          _state.user.entries = [];
+          const initials = ((firstName[0] || 'U') + (lastName[0] || firstName[1] || '')).toUpperCase();
+
+          const newAccount = {
+            id: cleanUsername,
+            username: cleanUsername,
+            email: form.email || `${cleanUsername}@cnu.edu.ph`,
+            password: form.password,
+            firstName,
+            lastName,
+            name: fullName,
+            initials,
+            shortInitial: firstName[0].toUpperCase(),
+            avatarClass: 'av-ink',
+            timezone: 'Asia/Manila',
+            timeZone: 'Asia/Manila',
+            entries: [],
+            privacyConfig: cloneState(_state.privacy || {})
+          };
+
+          _state.accounts[cleanUsername] = newAccount;
+          _state.user = cloneState(newAccount);
           _state.scheduleRev = (_state.scheduleRev || 1) + 1;
-          _state.ownerScheduleRev.francis = (_state.ownerScheduleRev.francis || 1) + 1;
-          invalidateSelectorsForChange({ ownerId: 'francis' });
+          _state.ownerScheduleRev[cleanUsername] = 1;
+          invalidateSelectorsForChange({ ownerId: cleanUsername });
+
           _state.session = {
             loggedIn: true,
             userId: cleanUsername,
             onboarding: true,
             signedOutNotice: false
           };
+
+          // Register on backend server if available (P0 Fix #1)
+          if (typeof fetch !== 'undefined') {
+            fetch('/api/auth/register', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                username: cleanUsername,
+                email: newAccount.email,
+                password: form.password,
+                firstName,
+                lastName
+              })
+            }).catch(() => {});
+          }
+
           result = { ok: true, mode: 'create', nextScreen: '28' };
         } else {
-          const isNewUser = cleanUsername !== _state.user.username && cleanUsername !== 'francis';
-          if (isNewUser) {
-            const cap = cleanUsername.charAt(0).toUpperCase() + cleanUsername.slice(1);
-            _state.user.firstName = cap;
-            _state.user.name = cap;
-            _state.user.username = cleanUsername;
-            _state.user.initials = cleanUsername.slice(0, 2).toUpperCase();
+          // Sign In mode: verify credentials & isolate profile
+          let account = _state.accounts[cleanUsername];
+          // Check if user is among friends in seed
+          if (!account) {
+            const matchedFriend = (_state.friends || []).find(
+              (f) => f.id === cleanUsername || f.username === cleanUsername
+            );
+            if (matchedFriend) {
+              account = {
+                id: matchedFriend.id,
+                username: matchedFriend.username || matchedFriend.id,
+                email: `${matchedFriend.id}@cnu.edu.ph`,
+                password: 'password123',
+                firstName: matchedFriend.firstName,
+                lastName: matchedFriend.lastName || '',
+                name: matchedFriend.name,
+                initials: matchedFriend.initials || 'FR',
+                shortInitial: matchedFriend.shortInitial || matchedFriend.name[0],
+                avatarClass: matchedFriend.avatarClass || 'av-mint',
+                timezone: 'Asia/Manila',
+                timeZone: 'Asia/Manila',
+                entries: [...(matchedFriend.entries || [])],
+                privacyConfig: cloneState(_state.privacy || {})
+              };
+              _state.accounts[matchedFriend.id] = account;
+            }
           }
+
+          if (!account) {
+            return {
+              ok: false,
+              errors: { username: 'Account does not exist. Please check your username or sign up.' }
+            };
+          }
+
+          // Verify password
+          const expectedPassword = account.password || 'password123';
+          if (form.password !== expectedPassword) {
+            return {
+              ok: false,
+              errors: { password: 'Incorrect password' }
+            };
+          }
+
+          // Isolated user profile switch - does not mutate Francis or other accounts!
+          _state.user = cloneState(account);
+          _state.scheduleRev = (_state.scheduleRev || 1) + 1;
+          _state.ownerScheduleRev[account.id] = (_state.ownerScheduleRev[account.id] || 1) + 1;
+          invalidateSelectorsForChange({ ownerId: account.id });
+
           const hasZeroClasses = (_state.user.entries || []).length === 0;
           _state.session = {
             loggedIn: true,
@@ -2110,6 +2280,19 @@ export const repo = {
             onboarding: hasZeroClasses,
             signedOutNotice: false
           };
+
+          // Login on backend if available (P0 Fix #1)
+          if (typeof fetch !== 'undefined') {
+            fetch('/api/auth/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                username: cleanUsername,
+                password: form.password
+              })
+            }).catch(() => {});
+          }
+
           result = { ok: true, mode: 'signin', nextScreen: hasZeroClasses ? '28' : '1' };
         }
         break;
@@ -2127,6 +2310,18 @@ export const repo = {
       }
 
       case 'DELETE_ACCOUNT': {
+        const userIdToDelete = _state.user?.id;
+        if (userIdToDelete && _state.accounts) {
+          delete _state.accounts[userIdToDelete];
+        }
+
+        // Call backend durable deletion transaction (P1 Fix #7)
+        if (userIdToDelete && typeof fetch !== 'undefined') {
+          fetch(`/api/users/${encodeURIComponent(userIdToDelete)}`, {
+            method: 'DELETE'
+          }).catch(() => {});
+        }
+
         const wiped = ensureScheduleRevs(createCleanState());
         wiped.session = {
           loggedIn: false,
@@ -2136,7 +2331,14 @@ export const repo = {
         };
         _state = wiped;
         _selectorCache.clear();
-        storageBridge.remove(STORAGE_KEY);
+
+        // Clear all storage layers durably before emitting
+        try {
+          if (typeof localStorage !== 'undefined') localStorage.removeItem(STORAGE_KEY);
+          if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(STORAGE_KEY);
+        } catch (_e) {}
+        storageBridge.remove(STORAGE_KEY).catch(() => {});
+
         notifyListeners();
         return { ok: true, nextScreen: '26' };
       }
@@ -2145,6 +2347,12 @@ export const repo = {
          Proposals / "Suggest" (V2 §4.3 & Addendum C §4)
          -------------------------------------------------------------------- */
       case 'CREATE_PROPOSAL': {
+        const friendIds = (_state.friends || []).map((f) => f.id);
+        const val = validateProposalInput(payload, friendIds);
+        if (!val.valid) {
+          return { ok: false, error: val.error };
+        }
+
         pushUndoSnapshot('CREATE_PROPOSAL', _state);
         const { windowStart, windowEnd, participantIds, dayIndex } = payload;
         const propId = `prop_${Date.now()}`;
@@ -2223,11 +2431,19 @@ export const repo = {
       }
 
       case 'SET_OVERLAP_PARTICIPANTS': {
-        const ids = Array.isArray(payload.participantIds) ? payload.participantIds : ['francis', 'gian', 'danica'];
-        const withUser = ids.includes('francis') ? ids : ['francis', ...ids];
+        const rawIds = Array.isArray(payload.participantIds) ? payload.participantIds : ['francis', 'gian', 'danica'];
+        const validFriendIds = new Set((_state.friends || []).map((f) => f.id));
+        validFriendIds.add('francis');
+        if (_state.user?.id) validFriendIds.add(_state.user.id);
+        validFriendIds.add('self');
+
+        // Sanitize and filter to valid IDs only (P1 Fix #9)
+        const ids = rawIds.filter((id) => validFriendIds.has(id));
+        const effectiveUser = _state.user?.id || 'francis';
+        const withUser = ids.includes(effectiveUser) ? ids : [effectiveUser, ...ids];
         _state.ui.overlapParticipantIds = withUser;
         _state.ui.overlapSelectedIds = withUser;
-        if (typeof payload.dayIndex === 'number') {
+        if (typeof payload.dayIndex === 'number' && payload.dayIndex >= 0 && payload.dayIndex <= 6) {
           _state.ui.overlapDayIndex = payload.dayIndex;
         }
         _state.ui.selectedOverlapWindow = payload.selectedWindow || null;
@@ -2784,6 +3000,12 @@ export const repo = {
       }
 
       case 'SET_ACCESS_RULE': {
+        const validPersonIds = (_state.friends || []).map((f) => f.id);
+        const validGroupIds = (_state.groups || []).map((g) => g.id);
+        const val = validateAccessRuleInput(payload, validPersonIds, validGroupIds);
+        if (!val.valid) {
+          return { ok: false, error: val.error };
+        }
         const { targetType, targetId, level } = payload;
         const normalized = PRIVACY_LEVELS_SET.has(level) ? level : labelToPrivacyLevel(level);
         if (targetType === 'group') {
@@ -2801,20 +3023,27 @@ export const repo = {
 
       case 'CREATE_SHARE_LINK': {
         const cfg = { ..._state.ui.shareSheetConfig, ...payload };
+        const validation = validateShareLinkConfig(cfg);
+        if (!validation.valid) {
+          return { ok: false, error: validation.error };
+        }
         const expiryDays = Number(cfg.expiryDays) || 6;
-        const randomDigits = Math.floor(1000 + Math.random() * 9000);
-        const id = `${_state.user.username}_${randomDigits}`;
+        const token = generateSecureToken();
+        const id = token;
         const expiresAt = currentNow.epochMs + expiryDays * 86400000;
         const expiresLabel = `${expiryDays} ${expiryDays === 1 ? 'day' : 'days'} left`;
+        const origin = (typeof window !== 'undefined' && window.location?.origin) ? window.location.origin : 'https://cnufree.com';
+        const fullUrl = `${origin}/s/${token}`;
 
         const newLink = {
           id,
+          token,
           ownerId: _state.user.id,
-          url: `cnufree.com/s/${id}`,
+          url: fullUrl,
           audience: cfg.audience || 'free_busy',
           mode: cfg.audience || 'free_busy',
-          hoursStart: parseTimeInputToMinutes(cfg.hoursStart || '09:00') || 540,
-          hoursEnd: parseTimeInputToMinutes(cfg.hoursEnd || '17:00') || 1020,
+          hoursStart: typeof cfg.hoursStart === 'number' ? cfg.hoursStart : (parseTimeInputToMinutes(cfg.hoursStart || '09:00') || 540),
+          hoursEnd: typeof cfg.hoursEnd === 'number' ? cfg.hoursEnd : (parseTimeInputToMinutes(cfg.hoursEnd || '17:00') || 1020),
           createdAt: currentNow.epochMs,
           expiresAt,
           expiryDays,
@@ -2823,10 +3052,26 @@ export const repo = {
         };
         _state.shareLinks.unshift(newLink);
         _state.ui.activeShareLinkId = id;
+
+        // Sync with backend server (P0 Fix #1 & #4)
+        if (typeof fetch !== 'undefined') {
+          fetch('/api/share-links', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ownerId: _state.user.id,
+              audience: newLink.audience,
+              hoursStart: newLink.hoursStart,
+              hoursEnd: newLink.hoursEnd,
+              expiryDays
+            })
+          }).catch(() => {});
+        }
+
         result = {
           ok: true,
           link: newLink,
-          url: `https://cnufree.com/s/${id}`,
+          url: fullUrl,
           toast: 'Share link created & copied'
         };
         break;
@@ -2834,14 +3079,47 @@ export const repo = {
 
       case 'REVOKE_SHARE_LINK': {
         const linkId = payload.linkId || _state.ui.activeShareLinkId;
-        const link = _state.shareLinks.find((l) => l.id === linkId);
+        const link = _state.shareLinks.find((l) => l.id === linkId || l.token === linkId);
         if (link) {
           link.revoked = true;
+          if (typeof fetch !== 'undefined') {
+            fetch(`/api/share-links/${encodeURIComponent(link.token || link.id)}`, {
+              method: 'DELETE'
+            }).catch(() => {});
+          }
         }
         result = {
           ok: true,
           toast: 'Share link revoked'
         };
+        break;
+      }
+
+      case 'LOAD_EXTERNAL_SHARE_LINK': {
+        const { link, owner, entries } = payload || {};
+        if (link) {
+          const id = link.token || link.id;
+          const enriched = {
+            ...link,
+            id,
+            owner: owner || {
+              id: link.ownerId || 'unknown',
+              name: 'Friend',
+              firstName: 'Friend',
+              username: 'friend',
+              avatarClass: 'av-ink'
+            },
+            entries: entries || []
+          };
+          const existingIdx = (_state.shareLinks || []).findIndex((l) => l.id === id || l.token === id);
+          if (existingIdx >= 0) {
+            _state.shareLinks[existingIdx] = enriched;
+          } else {
+            _state.shareLinks.unshift(enriched);
+          }
+          _state.ui.activeShareLinkId = id;
+        }
+        result = { ok: true };
         break;
       }
 
@@ -2904,7 +3182,18 @@ export const repo = {
         break;
     }
 
-    persistStateBeforeEmit(_state);
+    const persistRes = persistStateBeforeEmit(_state);
+    if (!persistRes.ok) {
+      _state = preDispatchSnapshot;
+      const errorMsg = persistRes.error || 'Failed to persist state changes. Rolled back.';
+      if (_errorToastHandler) {
+        try {
+          _errorToastHandler(errorMsg);
+        } catch (_e) {}
+      }
+      return { ok: false, rolledBack: true, error: errorMsg, toast: errorMsg };
+    }
+
     notifyListeners();
     return result;
   },

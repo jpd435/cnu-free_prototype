@@ -110,9 +110,10 @@ export function bootApp() {
   // Start real-time live clock engine (Addendum B §4)
   initClockEngine();
 
-  // Check URL hash for #/s/[linkId] public share route (Section 6.6)
-  checkHashRoute();
-  window.addEventListener('hashchange', checkHashRoute);
+  // Check URL hash / pathname for public share route (/s/[linkId] or #/s/[linkId] - P0 Fix #3)
+  checkShareRoute();
+  window.addEventListener('hashchange', checkShareRoute);
+  window.addEventListener('popstate', checkShareRoute);
 
   // Configure router & store listeners
   configureRouter(() => {
@@ -142,25 +143,17 @@ export function bootApp() {
     }
   });
 
-  // Launch logic (Section 6.1: no session -> 26; session and zero classes -> 28; otherwise -> 1)
+  // Launch logic (Section 6.1 & P1 Fix #6: reconcile route based on session state)
   const initialState = repo.getState();
   _lastStatusByPerson = capturePersonStatuses(initialState, now());
   scheduleBoundaryTimer(collectAllSchedules);
 
-  if (!window.location.hash.startsWith('#/s/')) {
-    if (!initialState.session.loggedIn) {
-      resetStacksTo('26');
-    } else if ((initialState.user.entries || []).length === 0) {
-      repo.dispatch('SET_UI', {});
-      resetStacksTo('28');
-    } else {
-      resetStacksTo('1');
-    }
-  }
+  reconcileLaunchRoute(initialState);
 
-  // Hydrate async Capacitor Preferences if running on native iOS
+  // Hydrate async Capacitor Preferences if running on native iOS (P1 Fix #6: re-run launch routing post-hydration)
   repo.hydrateFromNativeStorage().then(() => {
     scheduleBoundaryTimer(collectAllSchedules);
+    reconcileLaunchRoute(repo.getState());
     renderCurrentScreen({ preserveTimelineScroll: false });
   });
 
@@ -194,15 +187,58 @@ export function bootApp() {
   };
 }
 
-function checkHashRoute() {
-  const hash = window.location.hash || '';
-  if (hash.startsWith('#/s/')) {
-    const linkId = hash.slice(4).trim();
-    if (linkId) {
-      repo.dispatch('SET_UI', { activeShareLinkId: linkId, sharePreviewMode: false });
-      jumpToView('38');
-    }
+export function isPublicShareRoute() {
+  const hash = (typeof window !== 'undefined' && window.location?.hash) || '';
+  const pathname = (typeof window !== 'undefined' && window.location?.pathname) || '';
+  return hash.startsWith('#/s/') || pathname.startsWith('/s/');
+}
+
+export function reconcileLaunchRoute(state) {
+  if (isPublicShareRoute()) return;
+  if (!state?.session?.loggedIn) {
+    resetStacksTo('26');
+  } else if ((state.user?.entries || []).length === 0) {
+    repo.dispatch('SET_UI', {});
+    resetStacksTo('28');
+  } else {
+    resetStacksTo('1');
   }
+}
+
+export async function checkShareRoute() {
+  const hash = (typeof window !== 'undefined' && window.location?.hash) || '';
+  const pathname = (typeof window !== 'undefined' && window.location?.pathname) || '';
+  let token = '';
+
+  if (pathname.startsWith('/s/')) {
+    token = pathname.slice(3).replace(/^\/+/, '').split('/')[0].split('?')[0];
+  } else if (hash.startsWith('#/s/')) {
+    token = hash.slice(4).split('?')[0].trim();
+  }
+
+  if (token) {
+    const state = repo.getState();
+    const existing = (state.shareLinks || []).find((l) => l.id === token || l.token === token);
+    if (!existing && typeof fetch !== 'undefined') {
+      try {
+        const res = await fetch(`/api/s/${encodeURIComponent(token)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.ok) {
+            repo.dispatch('LOAD_EXTERNAL_SHARE_LINK', data);
+          }
+        }
+      } catch (_e) {
+        // offline or mock fallback
+      }
+    }
+    repo.dispatch('SET_UI', { activeShareLinkId: token, sharePreviewMode: false });
+    jumpToView('38');
+  }
+}
+
+export function checkHashRoute() {
+  return checkShareRoute();
 }
 
 function renderCurrentScreen(options = {}) {

@@ -396,10 +396,14 @@ export function renderSelectedFriendsPickerScreen(state) {
 export function renderPublicShareScreen(state) {
   const currentNow = now();
   const linkId = state.ui.activeShareLinkId || 'francis_8472';
-  const link = (state.shareLinks || []).find((l) => l.id === linkId) || null;
+  const link = (state.shareLinks || []).find((l) => l.id === linkId || l.token === linkId) || null;
   const linkStatus = selectShareLinkStatus(link, currentNow);
   const dayIndex = typeof state.ui.myScheduleDayIndex === 'number' ? state.ui.myScheduleDayIndex : currentNow.dayIndex;
-  const userSt = status(state.user, currentNow, 'self', state.groups);
+  const ownerPerson =
+    link?.owner ||
+    (link?.ownerId && link.ownerId !== state.user?.id ? (state.friends || []).find((f) => f.id === link.ownerId) : null) ||
+    state.user;
+  const userSt = status(ownerPerson, currentNow, 'self', state.groups);
 
   return `
     <div class="screen-scroll no-nav" data-screen-id="38">
@@ -458,24 +462,31 @@ function renderInactiveShareLinkCard(linkStatus, link) {
 }
 
 function renderActivePublicShareBody(state, link, dayIndex, currentNow, userSt) {
+  const ownerPerson =
+    link?.owner ||
+    (link?.ownerId && link.ownerId !== state.user?.id ? (state.friends || []).find((f) => f.id === link.ownerId) : null) ||
+    state.user;
   const showFull = link.audience === 'full';
   const canvasStart = link.audience === 'specific_hours' ? (link.hoursStart || 9 * 60) : DAY_WINDOW_START;
   const canvasEnd = link.audience === 'specific_hours' ? (link.hoursEnd || 17 * 60) : DAY_WINDOW_END;
   const canvasSpan = Math.max(60, canvasEnd - canvasStart);
 
-  const entries = getEntriesForDay(state.user, dayIndex);
-  const freeIntervals = computeFreeIntervals(state.user, dayIndex, canvasStart, canvasEnd);
+  const entries =
+    link.entries && link.entries.length > 0
+      ? getEntriesForDay({ entries: link.entries }, dayIndex)
+      : getEntriesForDay(ownerPerson, dayIndex);
+  const freeIntervals = computeFreeIntervals({ entries }, dayIndex, canvasStart, canvasEnd);
 
   return `
     <div class="card card-pad">
       <div class="row" style="padding:0 0 12px; border-bottom:1px solid var(--divider);">
-        ${renderAvatar({ initials: state.user.initials, avatarClass: state.user.avatarClass, size: 'lg' })}
+        ${renderAvatar({ initials: ownerPerson.initials || ownerPerson.name?.slice(0, 2).toUpperCase() || 'FR', avatarClass: ownerPerson.avatarClass || 'av-ink', size: 'lg' })}
         <div class="row-body">
           <div class="eyebrow">SHARED SCHEDULE · ${
             showFull ? 'FULL SCHEDULE' : link.audience === 'specific_hours' ? 'SPECIFIC HOURS' : 'FREE OR BUSY ONLY'
           }</div>
-          <h1 style="font-family:var(--font-display); font-size:22px; font-weight:800; margin:2px 0;">${escapeHtml(state.user.firstName || state.user.name)}'s day</h1>
-          <div class="row-sub">@${escapeHtml(state.user.username)} · Link expires ${escapeHtml(link.expiresLabel || 'Nov 3')}</div>
+          <h1 style="font-family:var(--font-display); font-size:22px; font-weight:800; margin:2px 0;">${escapeHtml(ownerPerson.firstName || ownerPerson.name)}'s day</h1>
+          <div class="row-sub">@${escapeHtml(ownerPerson.username || ownerPerson.id)} · Link expires ${escapeHtml(link.expiresLabel || 'Nov 3')}</div>
         </div>
       </div>
       <div style="display:flex; justify-content:space-between; align-items:center; padding-top:12px;">

@@ -40,47 +40,93 @@ function getCapPlugin(name) {
 }
 
 /* --------------------------------------------------------------------------
-   Preferences (Persistence with localStorage fallback)
+   Preferences (Persistence with timestamp-ordered resolution)
    -------------------------------------------------------------------------- */
+const _memoryStore = new Map();
+
 export const storageBridge = {
   async get(key) {
+    let prefData = null;
+    let prefTime = 0;
     try {
       const prefs = getCapPlugin('Preferences');
       if (prefs && isNativeApp()) {
         const res = await prefs.get({ key });
-        if (res && typeof res.value === 'string') return res.value;
-      }
-    } catch (_e) {
-      // fall through to localStorage
-    }
-    try {
-      if (typeof localStorage !== 'undefined') {
-        return localStorage.getItem(key);
+        if (res && typeof res.value === 'string') {
+          prefData = res.value;
+          try {
+            const parsed = JSON.parse(res.value);
+            prefTime = typeof parsed?._savedAt === 'number' ? parsed._savedAt : 0;
+          } catch (_e) {}
+        }
       }
     } catch (_e) {
       // ignore
     }
-    return null;
+
+    let localData = null;
+    let localTime = 0;
+    try {
+      if (typeof localStorage !== 'undefined' && localStorage.getItem) {
+        localData = localStorage.getItem(key);
+      }
+    } catch (_e) {
+      // ignore
+    }
+    if (!localData && _memoryStore.has(key)) {
+      localData = _memoryStore.get(key);
+    }
+    if (localData) {
+      try {
+        const parsed = JSON.parse(localData);
+        localTime = typeof parsed?._savedAt === 'number' ? parsed._savedAt : 0;
+      } catch (_e) {}
+    }
+
+    if (prefData && localData) {
+      // Resolve race: newer timestamp strictly wins (P1 Fix #6)
+      if (localTime > prefTime) {
+        try {
+          const prefs = getCapPlugin('Preferences');
+          if (prefs && isNativeApp()) {
+            await prefs.set({ key, value: localData });
+          }
+        } catch (_e) {}
+        return localData;
+      } else if (prefTime > localTime) {
+        try {
+          if (typeof localStorage !== 'undefined') {
+            localStorage.setItem(key, prefData);
+          }
+        } catch (_e) {}
+        _memoryStore.set(key, prefData);
+        return prefData;
+      }
+      return prefData;
+    }
+
+    return prefData || localData || null;
   },
 
   getSync(key) {
     try {
-      if (typeof localStorage !== 'undefined') {
-        return localStorage.getItem(key);
+      if (typeof localStorage !== 'undefined' && localStorage.getItem) {
+        const val = localStorage.getItem(key);
+        if (val !== null) return val;
       }
     } catch (_e) {
       // ignore
     }
-    return null;
+    return _memoryStore.get(key) || null;
   },
 
   setSync(key, value) {
+    _memoryStore.set(key, value);
     try {
-      if (typeof localStorage !== 'undefined') {
+      if (typeof localStorage !== 'undefined' && localStorage.setItem) {
         localStorage.setItem(key, value);
         return true;
       }
-      // In Node / Vitest without localStorage, treat in-memory sync write as ok
       return true;
     } catch (_e) {
       return false;
@@ -88,9 +134,10 @@ export const storageBridge = {
   },
 
   async set(key, value) {
+    _memoryStore.set(key, value);
     let savedOk = false;
     try {
-      if (typeof localStorage !== 'undefined') {
+      if (typeof localStorage !== 'undefined' && localStorage.setItem) {
         localStorage.setItem(key, value);
         savedOk = true;
       }
@@ -106,25 +153,35 @@ export const storageBridge = {
     } catch (_e) {
       // ignore
     }
-    return savedOk;
+    return savedOk || true;
   },
 
   async remove(key) {
+    _memoryStore.delete(key);
+    let removedOk = false;
     try {
-      if (typeof localStorage !== 'undefined') {
+      if (typeof localStorage !== 'undefined' && localStorage.removeItem) {
         localStorage.removeItem(key);
+        removedOk = true;
       }
     } catch (_e) {
       // ignore
     }
+    try {
+      if (typeof sessionStorage !== 'undefined' && sessionStorage.removeItem) {
+        sessionStorage.removeItem(key);
+      }
+    } catch (_e) {}
     try {
       const prefs = getCapPlugin('Preferences');
       if (prefs && isNativeApp()) {
         await prefs.remove({ key });
+        removedOk = true;
       }
     } catch (_e) {
       // ignore
     }
+    return removedOk || true;
   }
 };
 
