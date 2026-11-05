@@ -50,7 +50,7 @@ export function renderFriendsScreen(state, forcedViewState = null) {
   const incomingCount = (state.incomingRequests || []).length;
 
   return `
-    <div class="screen-scroll" style="padding-bottom:calc(120px + env(safe-area-inset-bottom, 0px));" data-screen-id="6">
+    <div class="screen-scroll" data-screen-id="6">
       <div class="top-bar" style="padding-bottom:2px;">
         <span class="meta-label">${avail.totalNonPrivateCount} friends · ${avail.freeNowCount} free now</span>
         <button
@@ -116,49 +116,48 @@ export function renderFriendsScreen(state, forcedViewState = null) {
             <span class="section-label">GROUPS</span>
             <button type="button" class="section-action" data-action="open-create-group">+ New group</button>
           </div>
-          <div class="chip-row" style="padding:0 16px;">
-            ${(state.groups || [])
-              .map((g) => {
-                const gStat = avail.groupStats?.[g.id] || { freeCount: 0, totalCount: g.memberIds.length };
-                return `
-                  <button
-                    type="button"
-                    class="chip"
-                    data-action="open-group-detail"
-                    data-group-id="${escapeHtml(g.id)}"
-                    data-group-free="${gStat.freeCount} of ${gStat.totalCount}"
-                  >${escapeHtml(g.name)} · ${g.memberIds.length}</button>
-                `;
-              })
-              .join('')}
-            <button
-              type="button"
-              class="chip dashed"
-              data-action="open-create-group"
-            >+ New group</button>
+          <div class="chip-row-wrap">
+            <div class="chip-row" style="padding:0 16px;">
+              ${(state.groups || [])
+                .map((g) => {
+                  const gStat = avail.groupStats?.[g.id] || { freeCount: 0, totalCount: g.memberIds.length };
+                  return `
+                    <button
+                      type="button"
+                      class="chip"
+                      data-action="open-group-detail"
+                      data-group-id="${escapeHtml(g.id)}"
+                      data-group-free="${gStat.freeCount} of ${gStat.totalCount}"
+                    >${escapeHtml(g.name)} · ${g.memberIds.length}</button>
+                  `;
+                })
+                .join('')}
+            </div>
           </div>
         </div>
 
         <!-- Status Filter Chips -->
-        <div class="chip-row" style="padding:0 16px;" role="tablist" aria-label="Filter friends by availability">
-          <button
-            type="button"
-            class="chip ${filter === 'All' ? 'active' : ''}"
-            data-action="set-friends-filter"
-            data-filter="All"
-          >All · ${avail.totalNonPrivateCount}</button>
-          <button
-            type="button"
-            class="chip ${filter === 'Free now' ? 'active' : ''}"
-            data-action="set-friends-filter"
-            data-filter="Free now"
-          >Free now · ${avail.freeNowCount}</button>
-          <button
-            type="button"
-            class="chip ${filter === 'Busy' ? 'active' : ''}"
-            data-action="set-friends-filter"
-            data-filter="Busy"
-          >Busy · ${avail.busyNowCount}</button>
+        <div class="chip-row-wrap">
+          <div class="chip-row" style="padding:0 16px;" role="tablist" aria-label="Filter friends by availability">
+            <button
+              type="button"
+              class="chip ${filter === 'All' ? 'active' : ''}"
+              data-action="set-friends-filter"
+              data-filter="All"
+            >All · ${avail.totalNonPrivateCount}</button>
+            <button
+              type="button"
+              class="chip ${filter === 'Free now' ? 'active' : ''}"
+              data-action="set-friends-filter"
+              data-filter="Free now"
+            >Free now · ${avail.freeNowCount}</button>
+            <button
+              type="button"
+              class="chip ${filter === 'Busy' ? 'active' : ''}"
+              data-action="set-friends-filter"
+              data-filter="Busy"
+            >Busy · ${avail.busyNowCount}</button>
+          </div>
         </div>
 
         <!-- Friends List Card (10 rows, scrolls cleanly above tab bar) -->
@@ -195,56 +194,61 @@ export function renderFriendsScreen(state, forcedViewState = null) {
 
 function renderFriendRow(friend, st) {
   const isPrivate = st.state === 'private';
-
-  let subLine = '';
-  let rightControl = '';
+  let dotClass = 'status-dot-free';
+  let line2Text = '';
+  let rightAccessControl = '';
 
   if (isPrivate) {
-    subLine = `<span style="display:inline-flex; align-items:center; gap:4px; color:#5C3A00;"><span style="display:inline-flex; transform:scale(0.8);">${ICONS.lock}</span> Schedule is private</span>`;
-    rightControl = `
+    dotClass = 'status-dot-private';
+    line2Text = `<span style="display:inline-flex; align-items:center; gap:4px; color:#5C3A00;"><span style="display:inline-flex; transform:scale(0.8);">${ICONS.lock}</span> Schedule is private</span>`;
+    rightAccessControl = `
       <button
         type="button"
         class="chip amber"
-        style="min-height:36px; padding:0 10px; font-size:11px;"
+        style="min-height:36px; padding:0 10px; font-size:11px; flex-shrink:0;"
         data-action="request-schedule-access"
         data-friend-id="${escapeHtml(friend.id)}"
         ${friend.accessRequested ? 'disabled' : ''}
       >${friend.accessRequested ? 'Requested' : 'Ask for access'}</button>
     `;
   } else if (st.noTimetable) {
-    subLine = 'No timetable yet';
-    rightControl = `<span class="pill-free-soft status-pill" data-person-id="${escapeHtml(friend.id)}" data-person-state="free">Free</span>`;
+    dotClass = 'status-dot-free';
+    line2Text = 'Free · No timetable yet';
   } else if (st.state === 'free') {
-    const nextDetail = st.nextEntry?.detail || st.nextEntry?.room;
-    const nextRoom = nextDetail ? ` · next ${nextDetail}` : '';
-    subLine = `${escapeHtml(st.statusText || 'Free for the rest of the day')}${escapeHtml(nextRoom)}`;
-    rightControl = `<span class="pill-free-soft status-pill" data-person-id="${escapeHtml(friend.id)}" data-person-state="free">Free · ${escapeHtml(st.countdownLabel || 'now')}</span>`;
+    dotClass = 'status-dot-free';
+    const until = st.untilFormatted ? `until ${st.untilFormatted}` : 'for the rest of the day';
+    line2Text = `Free ${until}`;
   } else {
+    dotClass = 'status-dot-busy';
     const shortTitle = st.currentEntry?.short || st.currentEntry?.code || 'In class';
-    const detailRoom = st.currentEntry?.detail || st.currentEntry?.room;
-    subLine = `${escapeHtml(shortTitle)}${detailRoom ? ` (${escapeHtml(detailRoom)})` : ''} · until ${escapeHtml(st.untilFormatted || 'later')}`;
-    rightControl = `<span class="pill-busy status-pill" data-person-id="${escapeHtml(friend.id)}" data-person-state="busy">Busy</span>`;
+    const until = st.untilFormatted ? `until ${st.untilFormatted}` : 'later';
+    line2Text = `Busy · ${escapeHtml(shortTitle)} ${until}`;
   }
 
   return `
-    <div class="row" data-friend-row="${escapeHtml(friend.id)}">
+    <div class="friend-card-row" data-friend-row="${escapeHtml(friend.id)}">
       <button
         type="button"
-        style="display:flex; align-items:center; gap:12px; flex:1; min-width:0; background:none; border:none; padding:4px 0; text-align:left; cursor:pointer;"
+        class="friend-row-tap"
+        style="min-height:44px;"
         data-action="open-friend-schedule"
         data-friend-id="${escapeHtml(friend.id)}"
+        aria-label="${escapeHtml(friend.name)}, ${isPrivate ? 'Schedule private' : line2Text}"
       >
         ${renderAvatar({ initials: friend.initials, avatarClass: friend.avatarClass })}
-        <div class="row-body">
-          <div class="row-title">${escapeHtml(friend.name)}</div>
-          <div class="row-sub clamp-2">${subLine}</div>
+        <div class="friend-row-content">
+          <div class="friend-row-line1">
+            <span class="friend-row-name">${escapeHtml(friend.name)}</span>
+            <span class="status-dot ${dotClass}" aria-hidden="true"></span>
+          </div>
+          <div class="friend-row-line2 clamp-1">${line2Text}</div>
         </div>
       </button>
-      ${rightControl}
+      ${rightAccessControl}
       <button
         type="button"
         class="icon-btn"
-        style="width:44px; height:44px; background:transparent; box-shadow:none;"
+        style="width:44px; height:44px; background:transparent; box-shadow:none; flex-shrink:0;"
         aria-label="More actions for ${escapeHtml(friend.name)}"
         data-action="open-friend-action-sheet"
         data-friend-id="${escapeHtml(friend.id)}"

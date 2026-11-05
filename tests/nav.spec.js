@@ -203,4 +203,93 @@ test.describe('CNU Free V2 — Canonical Navigation & Addendum B Acceptance Suit
     const classCountAfterDelete = await page.evaluate(() => window.CNUFreeRepo.getState().user.entries.length);
     expect(classCountAfterDelete).toBe(0);
   });
+
+  test('5. CNU Free — Immediate UI/UX Improvements (Items 1–10) across 320px, 375px, 390px, 430px', async ({ page }) => {
+    const widths = [320, 375, 390, 430];
+
+    for (const w of widths) {
+      await page.setViewportSize({ width: w, height: 750 });
+      await page.goto('/?dev=1');
+
+      // 1 & 2: Now screen friend list reduction (<=3 items) & See all friends button
+      await page.evaluate(() => window.CNUFreeClock.setClockPreset('Tue 09:41'));
+      await page.evaluate(() => window.navigateToScreen('1'));
+      const heroFriendRows = page.locator('[data-bind="now-hero-card"] .dark-friend-row');
+      const heroCount = await heroFriendRows.count();
+      expect(heroCount).toBeLessThanOrEqual(3);
+
+      const seeAllBtn = page.locator('[data-action="open-friends-tab"]');
+      await expect(seeAllBtn).toBeVisible();
+      await seeAllBtn.click();
+      await expect(page.locator('[data-screen-id="6"]')).toBeVisible();
+
+      // 3: Friends two-line pattern and status dot
+      const friendRows = page.locator('.friend-card-row');
+      const friendRowCount = await friendRows.count();
+      expect(friendRowCount).toBeGreaterThan(0);
+
+      const firstTap = friendRows.first().locator('.friend-row-tap');
+      const tapBox = await firstTap.boundingBox();
+      expect(tapBox.height).toBeGreaterThanOrEqual(44);
+
+      const moreBtn = friendRows.first().locator('[data-action="open-friend-action-sheet"]');
+      const moreBox = await moreBtn.boundingBox();
+      expect(moreBox.width).toBeGreaterThanOrEqual(44);
+      expect(moreBox.height).toBeGreaterThanOrEqual(44);
+
+      const statusDot = friendRows.first().locator('.status-dot');
+      await expect(statusDot).toBeVisible();
+
+      // 4: Group chips deduplication (no duplicate + New group chip inside chip-row)
+      const duplicateGroupChip = page.locator('.chip-row .chip.dashed[data-action="open-create-group"]');
+      expect(await duplicateGroupChip.count()).toBe(0);
+
+      // 5: Overlap screen horizontally swipeable comparison grid and + Add friend label
+      await page.evaluate(() => window.navigateToScreen('2'));
+      const addChip = page.locator('[data-bind="overlap-add-chip"]');
+      await expect(addChip).toHaveText('+ Add friend');
+
+      const overlapColsContainer = page.locator('.overlap-columns-container');
+      await expect(overlapColsContainer).toBeVisible();
+
+      // 6: Overlap stacked selectable window cards
+      const windowCards = page.locator('.window-picker-card');
+      const windowCardCount = await windowCards.count();
+      expect(windowCardCount).toBeGreaterThan(0);
+      const activeWindowCard = page.locator('.window-picker-card.active');
+      await expect(activeWindowCard).toBeVisible();
+
+      // 7: Safe bottom padding >= 136px
+      const scrollerPadding = await page.locator('.screen-scroll').evaluate((el) => {
+        return parseFloat(window.getComputedStyle(el).paddingBottom);
+      });
+      expect(scrollerPadding).toBeGreaterThanOrEqual(136);
+
+      // 8: Typography scale (display-xl is 24px)
+      const titleFontSize = await page.locator('.display-xl').evaluate((el) => {
+        return parseFloat(window.getComputedStyle(el).fontSize);
+      });
+      expect(titleFontSize).toBeCloseTo(24, 0);
+
+      // 9: Me profile card answers only identity and availability (no class count in header)
+      await page.evaluate(() => window.navigateToScreen('30'));
+      const profileCard = page.locator('[data-action="open-edit-profile-sheet"]');
+      const profileText = await profileCard.innerText();
+      expect(profileText).not.toContain('Sem 1 ·');
+
+      const myWeekRow = page.locator('[data-action="open-my-week"]');
+      await expect(myWeekRow).toContainText('Sem 1 ·');
+
+      // 10: Horizontal overflow stress check at current width
+      for (const sId of ['1', '2', '6', '30']) {
+        await page.evaluate((id) => window.navigateToScreen(id), sId);
+        const overflow = await page.evaluate(() => {
+          const scroller = document.querySelector('#phoneFrame .screen-scroll');
+          if (!scroller) return 0;
+          return scroller.scrollWidth - scroller.clientWidth;
+        });
+        expect(overflow).toBeLessThanOrEqual(1);
+      }
+    }
+  });
 });

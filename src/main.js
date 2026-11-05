@@ -401,6 +401,12 @@ function bindAppEvents(phoneFrame) {
         break;
       }
 
+      case 'open-friends-tab': {
+        haptics.light();
+        switchTab('Friends');
+        break;
+      }
+
       case 'nav-back': {
         haptics.light();
         popScreen();

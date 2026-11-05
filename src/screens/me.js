@@ -42,7 +42,7 @@ export function renderMeScreen(state) {
   return `
     <div class="screen-scroll" data-screen-id="30">
       <div class="top-bar" style="padding-bottom:2px;">
-        <span class="meta-label">YOUR PROFILE &amp; SETTINGS</span>
+        <span class="meta-label">Profile &amp; settings</span>
       </div>
 
       <div style="padding:0 16px 10px;">
@@ -50,7 +50,7 @@ export function renderMeScreen(state) {
       </div>
 
       <div class="stack-gap">
-        <!-- Profile Header Card -> Sheet 16 -->
+        <!-- Profile Header Card -> Sheet 16 (Answers only: who this is, handle, and availability - Item 9) -->
         <button
           type="button"
           class="card card-pad"
@@ -65,15 +65,14 @@ export function renderMeScreen(state) {
             </div>
             <span class="section-action">Edit</span>
           </div>
-          <div style="display:flex; justify-content:space-between; align-items:center; padding-top:12px;">
+          <div style="display:flex; align-items:center; padding-top:12px;">
             <span class="${userSt.state === 'free' ? 'pill-free-soft' : 'pill-busy'}">
               ${
                 userSt.state === 'free'
-                  ? `FREE NOW · ${escapeHtml(userSt.untilCopy.toUpperCase())}`
-                  : `BUSY · UNTIL ${escapeHtml(userSt.untilFormatted || '12:00 PM')}`
+                  ? `Free now · ${escapeHtml(userSt.untilCopy)}`
+                  : `Busy · Until ${escapeHtml(userSt.untilFormatted || '12:00 PM')}`
               }
             </span>
-            <span style="font-size:12px; color:#5A6862; font-weight:700;">Sem 1 · ${classCount} ${classCount === 1 ? 'class' : 'classes'}</span>
           </div>
         </button>
 
@@ -85,7 +84,7 @@ export function renderMeScreen(state) {
               <div class="avatar avatar-sm av-mint" style="color:#073D22;">${ICONS.calendar}</div>
               <div class="row-body">
                 <div class="row-title">My week</div>
-                <div class="row-sub">${classCount} classes · ${escapeHtml(getWeekRangeLabel(currentNow))}</div>
+                <div class="row-sub">Sem 1 · ${classCount} ${classCount === 1 ? 'class' : 'classes'} · ${escapeHtml(getWeekRangeLabel(currentNow))}</div>
               </div>
               <span style="color:#5A6862;">${ICONS.chevronRight}</span>
             </button>

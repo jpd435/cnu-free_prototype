@@ -37,52 +37,53 @@ export function renderOverlapScreen(state) {
   } = data;
 
   const activeWindow = selectedWindow || bestWindow;
-  const unselectedFriend = (state.friends || []).find((f) => !participantIds.includes(f.id));
-  const addChipLabel = unselectedFriend ? `+ ${unselectedFriend.firstName}` : '+ Friends';
+  const addChipLabel = '+ Add friend';
 
   return `
     <div class="screen-scroll" data-screen-id="${hasPrivateParticipant ? '36' : '2'}">
       <div class="top-bar" style="padding-bottom:2px;">
-        <span class="meta-label" data-bind="overlap-meta-label">${escapeHtml(`COMPARE SCHEDULES · ${(dayMeta.label || dayMeta.short).toUpperCase()}`)}</span>
+        <span class="meta-label" data-bind="overlap-meta-label">${escapeHtml(`Compare schedules · ${dayMeta.label || dayMeta.short}`)}</span>
       </div>
       <div style="padding:0 16px 8px;">
         <h1 class="display-xl">Shared free time</h1>
       </div>
 
-      <!-- Interactive Person Chips (scrolls horizontally with 10 friends) -->
-      <div class="chip-row" role="group" aria-label="Selected participants" data-bind="overlap-participant-chips">
-        ${participants
-          .map((p) => {
-            const isSelf = p.id === 'francis' || p.id === state.user.id;
-            const isPrivate =
-              !isSelf &&
-              (p.shareLevel === 'none' ||
-                p.sharesWithViewer === 'none' ||
-                p.shareLevelToUser === 'private' ||
-                p.shareLevelToUser === 'none');
-            return `
-              <button
-                type="button"
-                class="chip ${isPrivate ? 'amber' : 'active'}"
-                data-action="toggle-overlap-chip"
-                data-person-id="${escapeHtml(p.id)}"
-                aria-pressed="true"
-              >
-                <span class="avatar avatar-xs ${p.avatarClass}">${escapeHtml(p.shortInitial || p.initials)}</span>
-                ${escapeHtml(isSelf ? 'You' : p.firstName)}
-                ${isPrivate ? `<span style="display:inline-flex; transform:scale(0.8);">${ICONS.lock}</span>` : ''}
-                ${!isSelf ? '<span aria-hidden="true" style="opacity:0.75; margin-left:2px;">×</span>' : ''}
-              </button>
-            `;
-          })
-          .join('')}
+      <!-- Interactive Person Chips (scrolls horizontally with fade affordance) -->
+      <div class="chip-row-wrap">
+        <div class="chip-row" role="group" aria-label="Selected participants" data-bind="overlap-participant-chips">
+          ${participants
+            .map((p) => {
+              const isSelf = p.id === 'francis' || p.id === state.user.id;
+              const isPrivate =
+                !isSelf &&
+                (p.shareLevel === 'none' ||
+                  p.sharesWithViewer === 'none' ||
+                  p.shareLevelToUser === 'private' ||
+                  p.shareLevelToUser === 'none');
+              return `
+                <button
+                  type="button"
+                  class="chip ${isPrivate ? 'amber' : 'active'}"
+                  data-action="toggle-overlap-chip"
+                  data-person-id="${escapeHtml(p.id)}"
+                  aria-pressed="true"
+                >
+                  <span class="avatar avatar-xs ${p.avatarClass}">${escapeHtml(p.shortInitial || p.initials)}</span>
+                  ${escapeHtml(isSelf ? 'You' : p.firstName)}
+                  ${isPrivate ? `<span style="display:inline-flex; transform:scale(0.8);">${ICONS.lock}</span>` : ''}
+                  ${!isSelf ? '<span aria-hidden="true" style="opacity:0.75; margin-left:2px;">×</span>' : ''}
+                </button>
+              `;
+            })
+            .join('')}
 
-        <button
-          type="button"
-          class="chip dashed"
-          data-action="open-overlap-picker-sheet"
-          data-bind="overlap-add-chip"
-        >${escapeHtml(addChipLabel)}</button>
+          <button
+            type="button"
+            class="chip dashed"
+            data-action="open-overlap-picker-sheet"
+            data-bind="overlap-add-chip"
+          >${escapeHtml(addChipLabel)}</button>
+        </div>
       </div>
 
       <!-- 7-Day Selector Strip (Mon–Sun) -->
@@ -155,70 +156,102 @@ export function renderOverlapScreen(state) {
             : ''
         }
 
-        <!-- Multi-Person Timeline Card (7A–9P, scrollable) -->
+        <!-- Multi-Person Timeline Card (7A–9P, horizontally swipeable with fixed 36px time rail - Item 5) -->
         <div class="card card-pad" style="padding:12px;" data-bind="overlap-timeline-card">
-          <div style="display:grid; grid-template-columns:36px repeat(${columns.length}, 1fr); gap:6px; margin-bottom:8px; text-align:center; font-size:11px; font-weight:800; color:#5A6862;" data-bind="overlap-col-headers">
-            <div></div>
-            ${columns
-              .map(
-                (col) =>
-                  `<div class="clamp-1" data-key="col-hdr-${escapeHtml(col.personId)}" style="${col.isPrivate ? 'color:#5C3A00;' : ''}">${escapeHtml(col.name)}</div>`
-              )
-              .join('')}
-          </div>
+          ${
+            activeWindow && !hasPrivateParticipant
+              ? `
+                <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; background:rgba(108, 242, 162, 0.18); border:1.5px solid #1FB86B; border-radius:12px; padding:8px 12px; margin-bottom:12px;">
+                  <div style="display:flex; align-items:center; gap:8px; min-width:0;">
+                    <span style="background:#0B5A33; color:#FFFFFF; font-size:10px; font-weight:800; padding:3px 7px; border-radius:6px; letter-spacing:0.04em; flex-shrink:0;">SHARED FREE</span>
+                    <span style="font-family:var(--font-display); font-weight:800; font-size:14px; color:#073D22;" class="clamp-1">${escapeHtml(activeWindow.formatted)}</span>
+                  </div>
+                  <span style="font-size:12px; font-weight:700; color:#0B5A33; flex-shrink:0;">${escapeHtml(formatDurationLong(activeWindow.duration))}</span>
+                </div>
+              `
+              : ''
+          }
 
-          <div class="timeline-scroll" data-timeline-scroll="true">
-            <div class="timeline-wrap" style="height:520px;">
-              <div class="timeline-hours">
+          <div style="display:flex; position:relative; overflow:hidden;">
+            <!-- Fixed 36px Time Rail -->
+            <div style="width:36px; flex-shrink:0; display:flex; flex-direction:column;">
+              <div style="height:22px; margin-bottom:8px;"></div>
+              <div style="position:relative; height:520px; font-size:10px; font-weight:700; color:var(--muted); display:flex; flex-direction:column; justify-content:space-between;">
                 <span>7A</span><span>9A</span><span>11A</span><span>1P</span><span>3P</span><span>5P</span><span>7P</span><span>9P</span>
               </div>
+            </div>
 
-              <div class="timeline-canvas" style="display:grid; grid-template-columns:repeat(${columns.length}, 1fr); gap:6px;" data-bind="overlap-canvas">
-                <div class="tl-grid-line" data-key="gl-0" style="top:0%;"></div>
-                <div class="tl-grid-line" data-key="gl-1" style="top:14.28%;"></div>
-                <div class="tl-grid-line" data-key="gl-2" style="top:28.57%;"></div>
-                <div class="tl-grid-line" data-key="gl-3" style="top:42.85%;"></div>
-                <div class="tl-grid-line" data-key="gl-4" style="top:57.14%;"></div>
-                <div class="tl-grid-line" data-key="gl-5" style="top:71.42%;"></div>
-                <div class="tl-grid-line" data-key="gl-6" style="top:85.71%;"></div>
-                <div class="tl-grid-line" data-key="gl-7" style="top:100%;"></div>
+            <!-- Horizontally swipeable columns container -->
+            <div class="overlap-columns-container" data-timeline-scroll="true" style="flex:1; min-width:0;">
+              <div style="min-width:${Math.max(100, columns.length * 135)}px; width:100%;">
+                <div style="display:grid; grid-template-columns:repeat(${columns.length}, 1fr); gap:6px; height:22px; margin-bottom:8px; text-align:center; font-size:11px; font-weight:800; color:#5A6862;" data-bind="overlap-col-headers">
+                  ${columns
+                    .map(
+                      (col) =>
+                        `<div class="clamp-1" data-key="col-hdr-${escapeHtml(col.personId)}" style="${col.isPrivate ? 'color:#5C3A00;' : ''}">${escapeHtml(col.name)}</div>`
+                    )
+                    .join('')}
+                </div>
 
-                ${columns.map((col) => renderColumnFromModel(col)).join('')}
+                <div class="timeline-wrap" style="position:relative; height:520px; padding-left:0;">
+                  <div class="timeline-canvas" style="display:grid; grid-template-columns:repeat(${columns.length}, 1fr); gap:6px; border-left:none;" data-bind="overlap-canvas">
+                    <div class="tl-grid-line" data-key="gl-0" style="top:0%;"></div>
+                    <div class="tl-grid-line" data-key="gl-1" style="top:14.28%;"></div>
+                    <div class="tl-grid-line" data-key="gl-2" style="top:28.57%;"></div>
+                    <div class="tl-grid-line" data-key="gl-3" style="top:42.85%;"></div>
+                    <div class="tl-grid-line" data-key="gl-4" style="top:57.14%;"></div>
+                    <div class="tl-grid-line" data-key="gl-5" style="top:71.42%;"></div>
+                    <div class="tl-grid-line" data-key="gl-6" style="top:85.71%;"></div>
+                    <div class="tl-grid-line" data-key="gl-7" style="top:100%;"></div>
 
-                ${
-                  activeWindow && !hasPrivateParticipant
-                    ? renderBestOverlapCallout(activeWindow, columns.length)
-                    : ''
-                }
+                    ${columns.map((col) => renderColumnFromModel(col)).join('')}
+
+                    ${
+                      activeWindow && !hasPrivateParticipant
+                        ? renderBestOverlapCallout(activeWindow, columns.length)
+                        : ''
+                    }
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- All Shared Windows Selector Strip (updates in place when schedule changes) -->
+        <!-- All Shared Windows Selector (stacked selectable cards - Item 6) -->
         ${
           windows.length > 0 && !hasPrivateParticipant
             ? `
-              <div class="chip-row" style="padding:0 16px;" role="group" aria-label="All shared free windows" data-bind="overlap-windows-list">
-                ${windows
-                  .map((w) => {
-                    const isSelected =
-                      activeWindow && w.start === activeWindow.start && w.end === activeWindow.end;
-                    const isBest =
-                      bestWindow && w.start === bestWindow.start && w.end === bestWindow.end;
-                    return `
-                      <button
-                        type="button"
-                        class="chip ${isSelected ? 'active' : ''}"
-                        data-action="select-overlap-window"
-                        data-key="win-${w.start}-${w.end}"
-                        data-day-index="${dayIndex}"
-                        data-window-start="${w.start}"
-                        data-window-end="${w.end}"
-                      >${escapeHtml(`${w.formatted}${isBest ? ' (Best)' : ''}`)}</button>
-                    `;
-                  })
-                  .join('')}
+              <div class="window-picker-wrap" role="group" aria-label="All shared free windows" data-bind="overlap-windows-list">
+                <div class="section-label" style="padding:0 0 6px;">SHARED FREE WINDOWS (${windows.length})</div>
+                <div class="window-picker-grid">
+                  ${windows
+                    .map((w) => {
+                      const isSelected =
+                        activeWindow && w.start === activeWindow.start && w.end === activeWindow.end;
+                      const isBest =
+                        bestWindow && w.start === bestWindow.start && w.end === bestWindow.end;
+                      return `
+                        <button
+                          type="button"
+                          class="window-picker-card ${isSelected ? 'active' : ''}"
+                          data-action="select-overlap-window"
+                          data-key="win-${w.start}-${w.end}"
+                          data-day-index="${dayIndex}"
+                          data-window-start="${w.start}"
+                          data-window-end="${w.end}"
+                          aria-pressed="${isSelected ? 'true' : 'false'}"
+                        >
+                          <div class="window-picker-info">
+                            <span class="window-picker-time">${escapeHtml(w.formatted)}</span>
+                            <span class="window-picker-duration">· ${escapeHtml(formatDurationLong(w.duration))}</span>
+                          </div>
+                          ${isBest ? `<span class="pill-best">Best</span>` : ''}
+                        </button>
+                      `;
+                    })
+                    .join('')}
+                </div>
               </div>
             `
             : ''
@@ -231,12 +264,12 @@ export function renderOverlapScreen(state) {
               ? `
                 <div class="card card-pad" style="border:1.5px solid #1FB86B;" data-bind="overlap-summary-card">
                   <div class="eyebrow" style="color:#0B5A33;" data-bind="overlap-best-window-eyebrow">${escapeHtml(
-                    `SHARED WITH ${
+                    `Shared with ${
                       overlapResult.activeParticipants
                         .filter((p) => p.id !== 'francis' && p.id !== state.user.id)
-                        .map((p) => p.firstName.toUpperCase())
-                        .join(' & ') || 'FRIENDS'
-                    } ONLY`
+                        .map((p) => p.firstName)
+                        .join(' & ') || 'friends'
+                    } only`
                   )}</div>
                   <div style="font-family:var(--font-display); font-size:18px; font-weight:800; color:#073D22; margin:2px 0;" data-bind="overlap-best-window-title">${escapeHtml(`${dayMeta.short} ${bestWindow.formatted} · ${formatDurationLong(bestWindow.duration)}`)}</div>
                   <div class="row-sub" data-bind="overlap-best-window-sub">${escapeHtml(`Excludes ${firstPrivateParticipant?.firstName || 'private friend'} until they share their schedule`)}</div>
@@ -244,11 +277,11 @@ export function renderOverlapScreen(state) {
               `
               : `
                 <div class="card-dark" style="padding:14px 16px;" data-bind="overlap-summary-card">
-                  <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                  <div style="display:flex; flex-direction:column; gap:12px;">
                     <div>
-                      <div class="eyebrow" style="color:#6CF2A2;" data-bind="overlap-best-window-eyebrow">${escapeHtml(`BEST WINDOW · ${formatDurationLong(bestWindow.duration).toUpperCase()}`)}</div>
+                      <div class="eyebrow" style="color:#6CF2A2;" data-bind="overlap-best-window-eyebrow">${escapeHtml(`Best window · ${formatDurationLong(bestWindow.duration)}`)}</div>
                       <div style="font-family:var(--font-display); font-size:19px; font-weight:800; color:#FFF; margin-top:2px;" data-bind="overlap-best-window-title">${escapeHtml(`${dayMeta.short} ${bestWindow.formatted}`)}</div>
-                      <div style="font-size:12px; color:#B7C6BF;" data-bind="overlap-best-window-sub">${escapeHtml(
+                      <div style="font-size:12px; color:#B7C6BF; margin-top:2px;" data-bind="overlap-best-window-sub">${escapeHtml(
                         `All ${overlapResult.activeParticipants.length} free${
                           windows.length > 1
                             ? ` · Also ${windows
@@ -262,7 +295,7 @@ export function renderOverlapScreen(state) {
                     <button
                       type="button"
                       class="btn-mint"
-                      style="width:auto; min-height:44px; padding:0 16px; font-size:13px; flex-shrink:0;"
+                      style="width:100%; min-height:44px; padding:0 16px; font-size:13px;"
                       data-action="suggest-overlap-window"
                       data-bind="overlap-suggest-btn"
                       data-window-start="${activeWindow.start}"
@@ -320,7 +353,7 @@ function renderColumnFromModel(col) {
     .map(
       (b) => `
         <div class="tl-block busy" data-key="busy-${escapeHtml(b.id)}" style="top:${b.topPct.toFixed(1)}%; height:${b.heightPct.toFixed(1)}%; padding:4px 6px;">
-          <span class="tl-title clamp-2" style="font-size:10px;">${escapeHtml(b.title)}</span>
+          <span class="tl-title clamp-1" style="font-size:10px; font-weight:700;">${escapeHtml(b.short || b.code || 'Busy')}</span>
         </div>
       `
     )
@@ -336,18 +369,20 @@ function renderBestOverlapCallout(windowObj, participantCount) {
   const end = Math.min(DAY_WINDOW_END, windowObj.end);
   if (end <= s) return '';
   const topPct = ((s - canvasStart) / canvasSpan) * 100;
-  const heightPct = Math.max(11, ((end - s) / canvasSpan) * 100);
+  const heightPct = Math.max(8, ((end - s) / canvasSpan) * 100);
 
   return `
     <div
+      class="overlap-highlight-band"
       data-bind="overlap-highlight-band"
       data-overlap-callout="true"
       data-window-start="${windowObj.start}"
       data-window-end="${windowObj.end}"
-      style="position:absolute; left:0; right:0; top:${topPct.toFixed(1)}%; height:${heightPct.toFixed(1)}%; background:rgba(108,242,162,0.9); border:2px solid #0B5A33; border-radius:14px; display:flex; flex-direction:column; justify-content:center; align-items:center; z-index:4; pointer-events:none; box-shadow:0 6px 18px rgba(11,90,51,0.16);"
+      style="top:${topPct.toFixed(1)}%; height:${heightPct.toFixed(1)}%;"
     >
-      <span style="font-size:10px; font-weight:800; letter-spacing:0.08em; color:#073D22;" data-bind="overlap-band-eyebrow">${escapeHtml(`ALL ${participantCount} FREE · ${formatDurationLong(windowObj.duration).toUpperCase()}`)}</span>
-      <span style="font-family:var(--font-display); font-size:15px; font-weight:800; color:#073D22;" data-bind="overlap-band-time">${escapeHtml(windowObj.formatted)}</span>
+      <div class="overlap-band-tag" data-bind="overlap-band-eyebrow">
+        ALL ${participantCount} FREE · <span data-bind="overlap-band-time">${escapeHtml(windowObj.formatted)}</span>
+      </div>
     </div>
   `;
 }

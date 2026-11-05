@@ -50,29 +50,31 @@ export function renderNowScreen(state) {
         <h1 class="display-xl">cnu free?</h1>
       </div>
 
-      <!-- Group Filter Chips (All, Kalbo, Badminton, STEP) -->
-      <div class="chip-row" role="tablist" aria-label="Filter by group" data-bind="now-group-chips">
-        <button
-          type="button"
-          class="chip ${groupFilter === 'All' ? 'active' : ''}"
-          data-action="set-now-group-filter"
-          data-group="All"
-        >All</button>
-        ${groups
-          .map((g) => {
-            const isActive = groupFilter.toLowerCase() === g.name.toLowerCase();
-            const gStat = avail.groupStats?.[g.id] || { freeCount: 0, totalCount: g.memberIds.length };
-            return `
-              <button
-                type="button"
-                class="chip ${isActive ? 'active' : ''}"
-                data-action="set-now-group-filter"
-                data-group="${escapeHtml(g.name)}"
-                data-group-free="${gStat.freeCount} of ${gStat.totalCount}"
-              >${escapeHtml(`${g.name} · ${gStat.freeCount}/${gStat.totalCount}`)}</button>
-            `;
-          })
-          .join('')}
+      <!-- Group Filter Chips (All, Kalbo, Badminton, STEP) with scroll fade affordance -->
+      <div class="chip-row-wrap">
+        <div class="chip-row" role="tablist" aria-label="Filter by group" data-bind="now-group-chips">
+          <button
+            type="button"
+            class="chip ${groupFilter === 'All' ? 'active' : ''}"
+            data-action="set-now-group-filter"
+            data-group="All"
+          >All</button>
+          ${groups
+            .map((g) => {
+              const isActive = groupFilter.toLowerCase() === g.name.toLowerCase();
+              const gStat = avail.groupStats?.[g.id] || { freeCount: 0, totalCount: g.memberIds.length };
+              return `
+                <button
+                  type="button"
+                  class="chip ${isActive ? 'active' : ''}"
+                  data-action="set-now-group-filter"
+                  data-group="${escapeHtml(g.name)}"
+                  data-group-free="${gStat.freeCount} of ${gStat.totalCount}"
+                >${escapeHtml(`${g.name} · ${gStat.freeCount}/${gStat.totalCount}`)}</button>
+              `;
+            })
+            .join('')}
+        </div>
       </div>
 
       ${
@@ -91,7 +93,7 @@ export function renderNowScreen(state) {
       }
 
       <div class="stack-gap">
-        <!-- Dark Hero Card: Free Right Now -->
+        <!-- Dark Hero Card: Free Right Now (Top 3 Friends + See All Friends Button - Item 1 & 2) -->
         <section class="card-dark" aria-label="Friends free right now" data-bind="now-hero-card">
           <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
             <div>
@@ -101,7 +103,7 @@ export function renderNowScreen(state) {
                   ? `${avail.freeNowCount} of your ${avail.totalNonPrivateCount} friends`
                   : `Nobody's free right now`
               )}</div>
-              <div style="font-size:11px; color:#B7C6BF; font-weight:600; margin-top:2px;" data-bind="now-hero-free-until">${escapeHtml(userDay.heroFreeUntilText)}</div>
+              <div style="font-size:12px; color:#B7C6BF; font-weight:600; margin-top:2px;" data-bind="now-hero-free-until">${escapeHtml(userDay.heroFreeUntilText)}</div>
             </div>
             <span class="pill-free-bright">NOW</span>
           </div>
@@ -119,14 +121,13 @@ export function renderNowScreen(state) {
                   </div>
                 `
                 : avail.freeNow
+                    .slice(0, 3)
                     .map(({ friend, status: st }) => {
-                      const nextDetail = st.nextEntry?.detail || st.nextEntry?.room;
-                      const nextRoom = nextDetail ? ` · next ${nextDetail}` : '';
-                      const subText = st.noTimetable
+                      const secondary = st.noTimetable
                         ? 'No timetable yet'
-                        : st.nextEntry
-                        ? `Until ${st.untilFormatted}${nextRoom}`
-                        : st.statusText || 'Free for the rest of the day';
+                        : st.untilFormatted
+                        ? `Until ${st.untilFormatted}`
+                        : 'Rest of day';
                       return `
                         <button
                           type="button"
@@ -139,15 +140,29 @@ export function renderNowScreen(state) {
                           ${renderAvatar({ initials: friend.initials, avatarClass: friend.avatarClass })}
                           <div class="row-body">
                             <div class="dark-friend-name">${escapeHtml(friend.shortName || friend.name)}</div>
-                            <div class="dark-friend-sub" data-bind="hero-sub-${escapeHtml(friend.id)}">${escapeHtml(subText)}</div>
+                            <div class="dark-friend-sub" data-bind="hero-sub-${escapeHtml(friend.id)}">
+                              <span style="color:#6CF2A2; font-weight:700;">Free now</span> · ${escapeHtml(secondary)}
+                            </div>
                           </div>
-                          <span class="pill-free-outline status-pill" data-bind="hero-pill-${escapeHtml(friend.id)}" data-person-id="${escapeHtml(friend.id)}" data-person-state="${st.state}">${escapeHtml(st.countdownLabel || 'Free')}</span>
+                          <span style="color:rgba(255,255,255,0.4); margin-left:auto; display:inline-flex;">${ICONS.chevronRight}</span>
                         </button>
                       `;
                     })
                     .join('')
             }
           </div>
+
+          ${
+            avail.totalNonPrivateCount > 0
+              ? `
+                <button
+                  type="button"
+                  style="width:100%; padding:10px 0 2px; margin-top:4px; background:none; border:none; border-top:1px solid rgba(255,255,255,0.1); color:#6CF2A2; font-size:13px; font-weight:700; text-align:center; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:4px;"
+                  data-action="open-friends-tab"
+                >See all friends (${avail.totalNonPrivateCount}) →</button>
+              `
+              : ''
+          }
         </section>
 
         <!-- Your Day Ribbon OR Add Your Timetable Card (7A–9P) -->
@@ -214,7 +229,7 @@ export function renderNowScreen(state) {
                 data-bind="now-best-window-card"
                 style="cursor:pointer;"
               >
-                <div class="eyebrow" style="color:#0B5A33;" data-bind="now-best-window-eyebrow">${escapeHtml(`BEST WINDOW TODAY · ${formatDuration(bestOverlap.window.duration).toUpperCase()}`)}</div>
+                <div class="eyebrow" style="color:#0B5A33;" data-bind="now-best-window-eyebrow">${escapeHtml(`Best window today · ${formatDuration(bestOverlap.window.duration)}`)}</div>
                 <div style="font-family:var(--font-display); font-size:21px; font-weight:800; color:#073D22; margin:3px 0 2px;" data-bind="now-best-window-time">${escapeHtml(`${bestOverlap.window.formatted} today`)}</div>
                 <div style="font-size:13px; color:#0B5A33; font-weight:600;" data-bind="now-best-window-copy">${escapeHtml(bestOverlap.copy)}</div>
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px;">
