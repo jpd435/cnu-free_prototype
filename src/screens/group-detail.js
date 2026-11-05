@@ -158,13 +158,15 @@ export function renderGroupDetailScreen(state) {
                 : enrichedMembers
                     .map(({ friend, status: st }) => {
                       const isPrivate = st.state === 'private';
+                      const nextDetail = st.nextEntry?.detail || st.nextEntry?.room;
+                      const nextRoom = nextDetail ? ` · next ${nextDetail}` : '';
                       const subText = isPrivate
                         ? 'Schedule is private'
                         : st.noTimetable
                         ? 'No timetable yet'
                         : st.state === 'free'
-                        ? st.statusText || 'Free for the rest of the day'
-                        : `${st.currentEntry?.short || st.currentEntry?.code || 'Busy'} until ${st.untilFormatted || 'later'}`;
+                        ? (st.untilFormatted ? `Until ${st.untilFormatted}${nextRoom}` : 'Rest of the day')
+                        : `${st.currentEntry?.short || st.currentEntry?.code || 'In class'} until ${st.untilFormatted || 'later'}`;
                       return `
                         <div class="row">
                           <button
@@ -176,14 +178,14 @@ export function renderGroupDetailScreen(state) {
                             ${renderAvatar({ initials: friend.initials, avatarClass: friend.avatarClass })}
                             <div class="row-body">
                               <div class="row-title">${escapeHtml(friend.name)}</div>
-                              <div class="row-sub clamp-2">${escapeHtml(subText)}</div>
+                              <div class="row-sub clamp-1">${escapeHtml(subText)}</div>
                             </div>
                           </button>
                           ${
                             isPrivate
                               ? `<span class="pill-amber">Private</span>`
                               : st.state === 'free'
-                              ? `<span class="pill-free-soft status-pill" data-person-id="${escapeHtml(friend.id)}" data-person-state="free">Free · ${escapeHtml(st.countdownLabel || 'now')}</span>`
+                              ? `<span class="pill-free-soft status-pill" data-person-id="${escapeHtml(friend.id)}" data-person-state="free">Free</span>`
                               : `<span class="pill-busy status-pill" data-person-id="${escapeHtml(friend.id)}" data-person-state="busy">Busy</span>`
                           }
                           <button

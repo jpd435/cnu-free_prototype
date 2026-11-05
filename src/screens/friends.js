@@ -194,14 +194,12 @@ export function renderFriendsScreen(state, forcedViewState = null) {
 
 function renderFriendRow(friend, st) {
   const isPrivate = st.state === 'private';
-  let dotClass = 'status-dot-free';
-  let line2Text = '';
-  let rightAccessControl = '';
+  let subLine = '';
+  let rightControl = '';
 
   if (isPrivate) {
-    dotClass = 'status-dot-private';
-    line2Text = `<span style="display:inline-flex; align-items:center; gap:4px; color:#5C3A00;"><span style="display:inline-flex; transform:scale(0.8);">${ICONS.lock}</span> Schedule is private</span>`;
-    rightAccessControl = `
+    subLine = `<span style="display:inline-flex; align-items:center; gap:4px; color:#5C3A00;"><span style="display:inline-flex; transform:scale(0.8);">${ICONS.lock}</span> Schedule is private</span>`;
+    rightControl = `
       <button
         type="button"
         class="chip amber"
@@ -212,39 +210,39 @@ function renderFriendRow(friend, st) {
       >${friend.accessRequested ? 'Requested' : 'Ask for access'}</button>
     `;
   } else if (st.noTimetable) {
-    dotClass = 'status-dot-free';
-    line2Text = 'Free · No timetable yet';
+    subLine = 'No timetable yet';
+    rightControl = `<span class="pill-free-soft status-pill" data-person-id="${escapeHtml(friend.id)}" data-person-state="free" style="flex-shrink:0;">Free</span>`;
   } else if (st.state === 'free') {
-    dotClass = 'status-dot-free';
-    const until = st.untilFormatted ? `until ${st.untilFormatted}` : 'for the rest of the day';
-    line2Text = `Free ${until}`;
+    const nextDetail = st.nextEntry?.detail || st.nextEntry?.room;
+    const nextRoom = nextDetail ? ` · next ${nextDetail}` : '';
+    subLine = st.untilFormatted ? `Until ${st.untilFormatted}${nextRoom}` : 'Rest of the day';
+    rightControl = `<span class="pill-free-soft status-pill" data-person-id="${escapeHtml(friend.id)}" data-person-state="free" style="flex-shrink:0;">Free</span>`;
   } else {
-    dotClass = 'status-dot-busy';
     const shortTitle = st.currentEntry?.short || st.currentEntry?.code || 'In class';
+    const detailRoom = st.currentEntry?.detail || st.currentEntry?.room;
+    const roomStr = detailRoom ? ` (${detailRoom})` : '';
     const until = st.untilFormatted ? `until ${st.untilFormatted}` : 'later';
-    line2Text = `Busy · ${escapeHtml(shortTitle)} ${until}`;
+    subLine = `${escapeHtml(shortTitle)}${escapeHtml(roomStr)} until ${escapeHtml(until)}`;
+    rightControl = `<span class="pill-busy status-pill" data-person-id="${escapeHtml(friend.id)}" data-person-state="busy" style="flex-shrink:0;">Busy</span>`;
   }
 
   return `
-    <div class="friend-card-row" data-friend-row="${escapeHtml(friend.id)}">
+    <div class="row friend-card-row" data-friend-row="${escapeHtml(friend.id)}">
       <button
         type="button"
         class="friend-row-tap"
-        style="min-height:44px;"
+        style="display:flex; align-items:center; gap:12px; flex:1; min-width:0; min-height:44px; background:none; border:none; padding:4px 0; text-align:left; cursor:pointer;"
         data-action="open-friend-schedule"
         data-friend-id="${escapeHtml(friend.id)}"
-        aria-label="${escapeHtml(friend.name)}, ${isPrivate ? 'Schedule private' : line2Text}"
+        aria-label="${escapeHtml(friend.name)}, ${isPrivate ? 'Schedule private' : `${st.state === 'free' ? 'Free' : 'Busy'}, ${subLine}`}"
       >
         ${renderAvatar({ initials: friend.initials, avatarClass: friend.avatarClass })}
-        <div class="friend-row-content">
-          <div class="friend-row-line1">
-            <span class="friend-row-name">${escapeHtml(friend.name)}</span>
-            <span class="status-dot ${dotClass}" aria-hidden="true"></span>
-          </div>
-          <div class="friend-row-line2 clamp-1">${line2Text}</div>
+        <div class="row-body">
+          <div class="row-title">${escapeHtml(friend.name)}</div>
+          <div class="row-sub clamp-1">${subLine}</div>
         </div>
       </button>
-      ${rightAccessControl}
+      ${rightControl}
       <button
         type="button"
         class="icon-btn"

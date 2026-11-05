@@ -223,7 +223,7 @@ test.describe('CNU Free V2 — Canonical Navigation & Addendum B Acceptance Suit
       await seeAllBtn.click();
       await expect(page.locator('[data-screen-id="6"]')).toBeVisible();
 
-      // 3: Friends two-line pattern and status dot
+      // 3: Friends cohesive pattern: status-pill ('Free' or 'Busy') and non-redundant subtitle
       const friendRows = page.locator('.friend-card-row');
       const friendRowCount = await friendRows.count();
       expect(friendRowCount).toBeGreaterThan(0);
@@ -237,8 +237,15 @@ test.describe('CNU Free V2 — Canonical Navigation & Addendum B Acceptance Suit
       expect(moreBox.width).toBeGreaterThanOrEqual(44);
       expect(moreBox.height).toBeGreaterThanOrEqual(44);
 
-      const statusDot = friendRows.first().locator('.status-dot');
-      await expect(statusDot).toBeVisible();
+      const statusPill = friendRows.first().locator('.status-pill');
+      await expect(statusPill).toBeVisible();
+
+      const freePills = page.locator('.pill-free-soft.status-pill');
+      const freePillCount = await freePills.count();
+      if (freePillCount > 0) {
+        const firstFreePillText = await freePills.first().innerText();
+        expect(firstFreePillText.trim()).toBe('Free');
+      }
 
       // 4: Group chips deduplication (no duplicate + New group chip inside chip-row)
       const duplicateGroupChip = page.locator('.chip-row .chip.dashed[data-action="open-create-group"]');
