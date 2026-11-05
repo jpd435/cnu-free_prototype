@@ -133,6 +133,26 @@ test.describe('CNU Free V2 — Canonical Navigation & Addendum B Acceptance Suit
     await page.locator('[data-action="use-username-suggestion"]').click();
     await page.locator('[data-action="save-profile"]').click();
     await expect(page.locator('[data-screen-id="30"]')).toBeVisible();
+
+    // Screen 35: Friend Schedule (Week) functionality, Day <-> Week toggle, and Back navigation
+    await page.evaluate(() => window.navigateToScreen('35'));
+    await expect(page.locator('[data-screen-id="35"]')).toBeVisible();
+    await expect(page.locator('.seg-btn[data-mode="week"]')).toHaveClass(/active/);
+    await expect(page.locator('#phoneFrame')).toContainText('Shared windows this week');
+
+    // Toggle to Day (Screen 3)
+    await page.locator('.seg-btn[data-mode="day"]').click();
+    await expect(page.locator('[data-screen-id="3"]')).toBeVisible();
+    await expect(page.locator('.seg-btn[data-mode="day"]')).toHaveClass(/active/);
+
+    // Toggle back to Week (Screen 35)
+    await page.locator('.seg-btn[data-mode="week"]').click();
+    await expect(page.locator('[data-screen-id="35"]')).toBeVisible();
+    await expect(page.locator('.seg-btn[data-mode="week"]')).toHaveClass(/active/);
+
+    // Back to Friends (Screen 6)
+    await page.locator('[data-action="nav-back"]').click();
+    await expect(page.locator('[data-screen-id="6"]')).toBeVisible();
   });
 
   test('3. Runs full-screen on iPhone SE (375x667) and iPhone 15 Pro Max (430x932) with zero horizontal clipping and >=16px inputs', async ({ page }) => {

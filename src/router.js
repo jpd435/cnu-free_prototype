@@ -388,12 +388,6 @@ function mapViewToCanonicalRoute(viewId) {
     case '22':
     case '23':
       return '6';
-    case '35':
-      return '3';
-    case '36':
-      return '2';
-    case '37':
-      return '8';
     default:
       return viewId;
   }
