@@ -1229,6 +1229,10 @@ body.native-fullscreen .phone-frame {
   background: #1FB86B;
 }
 
+.day-pill.today:not(.active) {
+  border-color: #1FB86B;
+}
+
 .day-pill.active {
   background: var(--ink);
   color: #FFFFFF;

@@ -10,7 +10,6 @@ import { renderAvatar, escapeHtml } from '../ui/avatar.js';
 import {
   now,
   status,
-  DEMO_WEEK_DATES,
   getWeekDates,
   DAY_WINDOW_START,
   DAY_WINDOW_END,
@@ -154,17 +153,18 @@ function renderFriendDayBody(friend, dayIndex, dayMeta, currentNow, weekDates = 
     <div class="day-strip" style="padding:0 16px;" role="tablist" aria-label="Select day">
       ${weekDates.map((d) => {
         const active = d.dayIndex === dayIndex;
+        const isToday = d.dayIndex === currentNow.dayIndex;
         return `
           <button
             type="button"
-            class="day-pill ${active ? 'active' : ''}"
+            class="day-pill ${active ? 'active' : ''} ${isToday ? 'today' : ''}"
             data-action="set-friend-schedule-day"
             data-day-index="${d.dayIndex}"
             aria-selected="${active}"
           >
             <span class="d-let">${d.letter}</span>
             <span class="d-num">${d.num}</span>
-            <span class="d-dot"></span>
+            <span class="d-dot" style="${isToday && !active ? 'background:#1FB86B;' : ''}"></span>
           </button>
         `;
       }).join('')}

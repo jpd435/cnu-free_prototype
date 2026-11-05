@@ -16,7 +16,7 @@ import { renderAvatar, escapeHtml } from '../ui/avatar.js';
 import {
   now,
   status,
-  DEMO_WEEK_DATES,
+  getWeekDates,
   DAY_WINDOW_START,
   DAY_WINDOW_END,
   TIMELINE_HOUR_LABELS,
@@ -470,6 +470,8 @@ function renderActivePublicShareBody(state, link, dayIndex, currentNow, userSt) 
   const canvasStart = link.audience === 'specific_hours' ? (link.hoursStart || 9 * 60) : DAY_WINDOW_START;
   const canvasEnd = link.audience === 'specific_hours' ? (link.hoursEnd || 17 * 60) : DAY_WINDOW_END;
   const canvasSpan = Math.max(60, canvasEnd - canvasStart);
+  const weekDates = getWeekDates(currentNow);
+  const nowPct = Math.max(0, Math.min(100, ((currentNow.minutes - canvasStart) / canvasSpan) * 100));
 
   const entries =
     link.entries && link.entries.length > 0
@@ -504,19 +506,20 @@ function renderActivePublicShareBody(state, link, dayIndex, currentNow, userSt) 
     </div>
 
     <div class="day-strip" style="padding:0;" role="tablist" aria-label="Select day">
-      ${DEMO_WEEK_DATES.map((d) => {
+      ${weekDates.map((d) => {
         const active = d.dayIndex === dayIndex;
+        const isToday = d.dayIndex === currentNow.dayIndex;
         return `
           <button
             type="button"
-            class="day-pill ${active ? 'active' : ''}"
+            class="day-pill ${active ? 'active' : ''} ${isToday ? 'today' : ''}"
             data-action="set-my-schedule-day"
             data-day-index="${d.dayIndex}"
             aria-selected="${active}"
           >
             <span class="d-let">${d.letter}</span>
             <span class="d-num">${d.num}</span>
-            <span class="d-dot"></span>
+            <span class="d-dot" style="${isToday && !active ? 'background:#1FB86B;' : ''}"></span>
           </button>
         `;
       }).join('')}
@@ -568,6 +571,18 @@ function renderActivePublicShareBody(state, link, dayIndex, currentNow, userSt) 
                 `;
               })
               .join('')}
+
+            ${
+              dayIndex === currentNow.dayIndex &&
+              currentNow.minutes >= canvasStart &&
+              currentNow.minutes <= canvasEnd
+                ? `
+                  <div class="now-line" style="top:${nowPct.toFixed(1)}%; z-index:5;">
+                    <span class="now-pill">${escapeHtml(currentNow.formattedTime.replace(' AM', '').replace(' PM', ''))}</span>
+                  </div>
+                `
+                : ''
+            }
           </div>
         </div>
       </div>

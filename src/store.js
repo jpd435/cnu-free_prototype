@@ -45,7 +45,8 @@ import {
   parseScheduleTitle,
   DAY_WINDOW_START,
   DAY_WINDOW_END,
-  DEMO_WEEK_DATES
+  getWeekDates,
+  WEEKDAY_SHORT
 } from './time.js';
 import { registerScheduleBoundaryProvider, scheduleNextTimers } from './clock.js';
 import {
@@ -920,7 +921,7 @@ export function applySimulatedChange(payload = {}) {
           targetEntry.start = 14 * 60;
           targetEntry.end = 15 * 60 + 30;
         }
-        detailText = `Moved ${targetEntry.short || targetEntry.title} (${DEMO_WEEK_DATES[newDay]?.short || 'Mon'}) to ${formatRange(targetEntry.start, targetEntry.end)}`;
+        detailText = `Moved ${targetEntry.short || targetEntry.title} (${WEEKDAY_SHORT[newDay] || 'Mon'}) to ${formatRange(targetEntry.start, targetEntry.end)}`;
       }
 
       targetFriend.updatedAgo = 'Updated just now';
@@ -1430,10 +1431,14 @@ export function selectOverlap(state, rawParticipantIds = null, rawDayIndex = nul
       }
 
       const columns = participants.map((p) => buildParticipantColumnModel(p, dayIndex, state.user.id));
+      const weekDates = getWeekDates(currentNow);
+      const dayMeta = weekDates[dayIndex] || weekDates[currentNow.dayIndex] || weekDates[0];
 
       return {
         dayIndex,
-        dayMeta: DEMO_WEEK_DATES[dayIndex] || DEMO_WEEK_DATES[1],
+        dayMeta,
+        weekDates,
+        currentNow,
         participants,
         participantIds: normalizedIds,
         overlapResult: normalizedResult,
@@ -1579,7 +1584,8 @@ export function selectFreeTogether(state, friendId = null, rawDayIndex = null, c
     days: [dayIndex],
     signature,
     compute: () => {
-      const dayMeta = DEMO_WEEK_DATES[dayIndex] || DEMO_WEEK_DATES[1];
+      const weekDates = getWeekDates(currentNow);
+      const dayMeta = weekDates[dayIndex] || weekDates[currentNow.dayIndex] || weekDates[0];
       const friendSt = selectPersonStatus(state, friend.id, currentNow);
       const isPrivate = friendSt.state === 'private';
 
@@ -1611,7 +1617,7 @@ export function selectFreeTogether(state, friendId = null, rawDayIndex = null, c
         : computeFreeIntervals(friend, dayIndex, canvasStart, DAY_WINDOW_END);
       const nowPct = Math.max(0, Math.min(100, ((currentNow.minutes - canvasStart) / canvasSpan) * 100));
 
-      const weekColumns = DEMO_WEEK_DATES.map((d) => ({
+      const weekColumns = weekDates.map((d) => ({
         dayMeta: d,
         isToday: d.dayIndex === currentNow.dayIndex,
         entries: isPrivate ? [] : getEntriesForDay(friend, d.dayIndex),
@@ -1721,9 +1727,10 @@ export function selectMyScheduleView(state, rawDayIndex = null, currentNow = now
       const canvasStart = DAY_WINDOW_START;
       const canvasEnd = DAY_WINDOW_END;
       const canvasSpan = canvasEnd - canvasStart;
-      const dayMeta = DEMO_WEEK_DATES[dayIndex] || DEMO_WEEK_DATES[1];
+      const weekDates = getWeekDates(currentNow);
+      const dayMeta = weekDates[dayIndex] || weekDates[currentNow.dayIndex] || weekDates[0];
 
-      const weekColumns = DEMO_WEEK_DATES.map((d) => ({
+      const weekColumns = weekDates.map((d) => ({
         dayMeta: d,
         isToday: d.dayIndex === currentNow.dayIndex,
         entries: getEntriesForDay(state.user, d.dayIndex),

@@ -15,6 +15,7 @@ import {
   formatDurationLong,
   WEEKDAY_SHORT,
   DEMO_WEEK_DATES,
+  getWeekDates,
   now
 } from './time.js';
 import { resolvePrivacyLevel } from './privacy.js';
@@ -142,7 +143,8 @@ export function findNextDayWithOverlap(participants, startDayIndex, options = {}
       minStart: DAY_WINDOW_START
     });
     if (res.bestWindow) {
-      const dateMeta = DEMO_WEEK_DATES.find((d) => d.dayIndex === candidateDay);
+      const weekDates = getWeekDates(now());
+      const dateMeta = weekDates.find((d) => d.dayIndex === candidateDay) || DEMO_WEEK_DATES.find((d) => d.dayIndex === candidateDay);
       return {
         dayIndex: candidateDay,
         dayShort: WEEKDAY_SHORT[candidateDay],

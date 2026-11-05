@@ -9,7 +9,8 @@
 import { ICONS } from '../ui/icons.js';
 import { escapeHtml } from '../ui/avatar.js';
 import {
-  DEMO_WEEK_DATES,
+  now,
+  getWeekDates,
   DAY_WINDOW_START,
   DAY_WINDOW_END,
   formatCompactRange,
@@ -18,7 +19,8 @@ import {
 import { selectOverlapViewData } from '../store.js';
 
 export function renderOverlapScreen(state) {
-  const data = selectOverlapViewData(state);
+  const currentNow = now();
+  const data = selectOverlapViewData(state, currentNow);
   const {
     dayIndex,
     dayMeta,
@@ -36,13 +38,15 @@ export function renderOverlapScreen(state) {
     activeProposal
   } = data;
 
+  const weekDates = data.weekDates || getWeekDates(currentNow);
+  const nowPct = Math.max(0, Math.min(100, ((currentNow.minutes - DAY_WINDOW_START) / (DAY_WINDOW_END - DAY_WINDOW_START)) * 100));
   const activeWindow = selectedWindow || bestWindow;
   const addChipLabel = '+ Add friend';
 
   return `
     <div class="screen-scroll" data-screen-id="${hasPrivateParticipant ? '36' : '2'}">
       <div class="top-bar" style="padding-bottom:2px;">
-        <span class="meta-label" data-bind="overlap-meta-label">${escapeHtml(`Compare schedules · ${dayMeta.label || dayMeta.short}`)}</span>
+        <span class="meta-label" data-bind="overlap-meta-label">${escapeHtml(`Compare schedules · ${dayMeta.label || dayMeta.short}${dayIndex === currentNow.dayIndex ? ` · ${currentNow.formattedTime}` : ''}`)}</span>
       </div>
       <div style="padding:0 16px 8px;">
         <h1 class="display-xl">Shared free time</h1>
@@ -86,21 +90,22 @@ export function renderOverlapScreen(state) {
         </div>
       </div>
 
-      <!-- 7-Day Selector Strip (Mon–Sun) -->
+      <!-- 7-Day Selector Strip (Mon–Sun, accurate dates in sync with device) -->
       <div class="day-strip" role="tablist" aria-label="Select day of week" data-bind="overlap-day-strip">
-        ${DEMO_WEEK_DATES.map((d) => {
+        ${weekDates.map((d) => {
           const active = d.dayIndex === dayIndex;
+          const isToday = d.dayIndex === currentNow.dayIndex;
           return `
             <button
               type="button"
-              class="day-pill ${active ? 'active' : ''}"
+              class="day-pill ${active ? 'active' : ''} ${isToday ? 'today' : ''}"
               data-action="set-overlap-day"
               data-day-index="${d.dayIndex}"
               aria-selected="${active}"
             >
               <span class="d-let">${d.letter}</span>
               <span class="d-num">${d.num}</span>
-              <span class="d-dot"></span>
+              <span class="d-dot" style="${isToday && !active ? 'background:#1FB86B;' : ''}"></span>
             </button>
           `;
         }).join('')}
@@ -209,6 +214,18 @@ export function renderOverlapScreen(state) {
                     ${
                       activeWindow && !hasPrivateParticipant
                         ? renderBestOverlapCallout(activeWindow, columns.length)
+                        : ''
+                    }
+
+                    ${
+                      dayIndex === currentNow.dayIndex &&
+                      currentNow.minutes >= DAY_WINDOW_START &&
+                      currentNow.minutes <= DAY_WINDOW_END
+                        ? `
+                          <div class="now-line" style="top:${nowPct.toFixed(1)}%; left:0; right:0; z-index:5;">
+                            <span class="now-pill" style="margin-left:4px;">${escapeHtml(currentNow.formattedTime.replace(' AM', '').replace(' PM', ''))}</span>
+                          </div>
+                        `
                         : ''
                     }
                   </div>

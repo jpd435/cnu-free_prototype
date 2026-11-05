@@ -259,6 +259,16 @@ test.describe('CNU Free V2 — Canonical Navigation & Addendum B Acceptance Suit
       const overlapColsContainer = page.locator('.overlap-columns-container');
       await expect(overlapColsContainer).toBeVisible();
 
+      // Verify Overlap displays accurate date and time in sync with clock
+      const overlapMeta = page.locator('[data-bind="overlap-meta-label"]');
+      const nowInfo = await page.evaluate(() => window.CNUFreeClock.now());
+      await expect(overlapMeta).toContainText(nowInfo.dayShort);
+
+      const dayStripPills = page.locator('[data-bind="overlap-day-strip"] .day-pill');
+      expect(await dayStripPills.count()).toBe(7);
+      const todayPill = dayStripPills.nth(nowInfo.dayIndex);
+      await expect(todayPill).toHaveClass(/active/);
+
       // 6: Overlap stacked selectable window cards
       const windowCards = page.locator('.window-picker-card');
       const windowCardCount = await windowCards.count();

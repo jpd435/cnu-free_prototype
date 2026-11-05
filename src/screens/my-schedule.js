@@ -16,7 +16,6 @@ import { ICONS } from '../ui/icons.js';
 import { escapeHtml } from '../ui/avatar.js';
 import {
   now,
-  DEMO_WEEK_DATES,
   getWeekDates,
   getWeekRangeLabel,
   DAY_WINDOW_START,
@@ -198,17 +197,18 @@ function renderMyDayBody(state, dayIndex, dayMeta, currentNow, weekDates = getWe
     <div class="day-strip" style="padding:0;" role="tablist" aria-label="Select day">
       ${weekDates.map((d) => {
         const active = d.dayIndex === dayIndex;
+        const isToday = d.dayIndex === currentNow.dayIndex;
         return `
           <button
             type="button"
-            class="day-pill ${active ? 'active' : ''}"
+            class="day-pill ${active ? 'active' : ''} ${isToday ? 'today' : ''}"
             data-action="set-my-schedule-day"
             data-day-index="${d.dayIndex}"
             aria-selected="${active}"
           >
             <span class="d-let">${d.letter}</span>
             <span class="d-num">${d.num}</span>
-            <span class="d-dot"></span>
+            <span class="d-dot" style="${isToday && !active ? 'background:#1FB86B;' : ''}"></span>
           </button>
         `;
       }).join('')}
