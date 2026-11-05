@@ -1168,8 +1168,8 @@ export function selectYourDay(state, currentNow = now(), dayIndex = currentNow.d
       );
 
       const nextFreeLabel = upcomingFree
-        ? `NEXT FREE ${formatCompactRange(upcomingFree.start, upcomingFree.end)}`
-        : 'FREE TODAY';
+        ? `Next free ${formatCompactRange(upcomingFree.start, upcomingFree.end)}`
+        : 'Free today';
 
       let yourDaySubText = '';
       if (userStatus.state === 'busy') {
@@ -1186,7 +1186,7 @@ export function selectYourDay(state, currentNow = now(), dayIndex = currentNow.d
       if (userStatus.state === 'free') {
         heroFreeUntilText = userStatus.statusText || 'Free for the rest of the day';
       } else if (upcomingFree) {
-        heroFreeUntilText = `You're free ${formatCompactRange(upcomingFree.start, upcomingFree.end)} (Free until ${formatTime12(upcomingFree.end)})`;
+        heroFreeUntilText = `You're free ${formatCompactRange(upcomingFree.start, upcomingFree.end)} (until ${formatTime12(upcomingFree.end)})`;
       } else {
         heroFreeUntilText = `Busy until ${userStatus.untilFormatted || 'later'}`;
       }

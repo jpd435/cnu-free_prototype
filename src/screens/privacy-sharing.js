@@ -493,8 +493,8 @@ function renderActivePublicShareBody(state, link, dayIndex, currentNow, userSt) 
         <span class="${userSt.state === 'free' ? 'pill-free-soft' : 'pill-busy'}">
           ${
             userSt.state === 'free'
-              ? `FREE NOW · ${escapeHtml(userSt.untilCopy.toUpperCase())}`
-              : `BUSY UNTIL ${escapeHtml(userSt.untilFormatted || '12:00 PM')}`
+              ? `Free now · ${userSt.untilFormatted ? `Until ${escapeHtml(userSt.untilFormatted)}` : 'Rest of the day'}`
+              : `Busy · Until ${escapeHtml(userSt.untilFormatted || '12:00 PM')}`
           }
         </span>
         <span style="font-size:12px; color:#5A6862; font-weight:700;">

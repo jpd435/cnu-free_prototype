@@ -69,7 +69,7 @@ export function renderMeScreen(state) {
             <span class="${userSt.state === 'free' ? 'pill-free-soft' : 'pill-busy'}">
               ${
                 userSt.state === 'free'
-                  ? `Free now · ${escapeHtml(userSt.untilCopy)}`
+                  ? `Free now · ${userSt.untilFormatted ? `Until ${escapeHtml(userSt.untilFormatted)}` : 'Rest of the day'}`
                   : `Busy · Until ${escapeHtml(userSt.untilFormatted || '12:00 PM')}`
               }
             </span>

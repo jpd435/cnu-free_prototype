@@ -97,20 +97,20 @@ export function renderFriendScheduleScreen(state, modeOverride = null) {
             ${
               isPrivate
                 ? `
-                  <span class="pill-amber">PRIVATE</span>
+                  <span class="pill-amber">Private</span>
                   <span style="font-size:12px; color:#5A6862; font-weight:700;">Schedule hidden</span>
                 `
                 : friendSt.state === 'busy'
                 ? `
-                  <span class="pill-busy status-pill" data-person-id="${escapeHtml(friend.id)}" data-person-state="busy">BUSY UNTIL ${escapeHtml(friendSt.untilFormatted || '12:00 PM')}</span>
-                  <span style="font-size:12px; color:#0B5A33; font-weight:700;">
-                    Free at ${escapeHtml(friendSt.untilFormatted || 'later')}
+                  <span class="pill-busy status-pill" data-person-id="${escapeHtml(friend.id)}" data-person-state="busy">Busy</span>
+                  <span style="font-size:12px; color:#E06A3B; font-weight:700;">
+                    Until ${escapeHtml(friendSt.untilFormatted || 'later')}
                   </span>
                 `
                 : `
-                  <span class="pill-free-soft status-pill" data-person-id="${escapeHtml(friend.id)}" data-person-state="free">FREE NOW</span>
+                  <span class="pill-free-soft status-pill" data-person-id="${escapeHtml(friend.id)}" data-person-state="free">Free</span>
                   <span style="font-size:12px; color:#0B5A33; font-weight:700;">
-                    ${escapeHtml(friendSt.noTimetable ? 'No timetable yet' : friendSt.statusText || 'Free for the rest of the day')}
+                    ${escapeHtml(friendSt.noTimetable ? 'No timetable yet' : friendSt.untilFormatted ? `Until ${friendSt.untilFormatted}` : 'Rest of the day')}
                   </span>
                 `
             }
